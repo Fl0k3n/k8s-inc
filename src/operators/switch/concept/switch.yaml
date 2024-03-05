@@ -1,0 +1,27 @@
+apiVersion: inc.example.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: myIncSwitch
+spec:
+  memory: 1Gi
+  arch: bmv2 # this will be used for choosing proper program out of program config and letting controller know how to handle the device
+  controllerPort: 2 # these 2 will be used for establishing communication with switch
+  p4RuntimePort: 9559 
+  programName: someP4Program # switch controller must watch this change and reinstall program if needed
+  forwardingMatchActionConfig: someTableConfig # this will contain rules such as forwarding, controller doesn't need to react to this change; human operators and/or external SDN tools should apply all changes here
+  effectiveMatchActionConfig: someOtherTableConfig # this will contain effective rules, those that need to be applied to the device, if default program is installed this can point to the table above, if new program is installed controller for that program need to somehow apply entries in forwarding table config and other entries; switch controller will watch changes of this table and make sure that switch entries match these
+
+--- DEPRECATED ------------------------------------------
+baseTableConfig:
+  # program-independant l2/l3/tunneling configuration, program controllers MUST maintain it (use same tables or different but keep semanticts and map those entries appropriately into someTableConfig)
+  # if program is installed then controller for that program is responsible for taking those entries and mapping them
+  # into someTableConfig, if program is not installed we fallback to default forwarder that strictly takes these entries
+  # and programs device with them
+  tables:
+    l3forward:
+      actions: ...
+    otherTable: ...
+otherRuntimeSwitchState: ... # registers, num entries etc
+
+# remember that network can change while cluster operates (switch added / changed / removed) -> graph may need rebuilding
+# and existing INC controllers should be notified to reschedule pods if necessary

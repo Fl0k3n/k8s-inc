@@ -1,0 +1,51 @@
+apiVersion: inc.example.com/v1alpha1
+kind: Topology # topology aware controllers must watch this change, these should be changed by cluster administrator and/or external sdn tool
+metadata:
+  name: clusterTopology
+spec:
+  graph:
+    - type: incDevice
+      name: myIncDevice
+      links:
+        - port: 1
+          ipv4: "1.1.1.1/24"
+          peerName: someOtherDevice1
+        - port: 2
+          ipv4: "2.2.2.2/24"
+          peerName: node1
+    - type: clusterExternal
+      name: internet1
+    - type: node
+      name: node1
+      links:
+        - peerName: myIncDevice
+    - type: netDevice
+      name: router1
+      links:
+        - peerName: myIncDevice
+        - peerName: internet1
+
+# assume this resource is constant, dependand controllers will fetch it to get topology graph 
+# for externalINTasDeployment controller will need to 
+
+
+--- DEPRECATED ------------------------------------
+apiVersion: inc.example.com/v1alpha1
+kind: Topology
+metadata:
+  name: clusterTopology
+spec:
+  graph:
+    - switch: x1
+      connections:
+        - x2
+        - x3
+    - switch: x2
+      connections:
+        - x1
+    - switch: x3
+      connections:
+        - x1
+# this resource shouldn't be edited directly, it should be available for controllers to use
+# and it should be monitored by controllers that depend on topology
+# switch controllers should update this resource once they are updated

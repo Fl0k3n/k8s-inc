@@ -1,0 +1,17 @@
+apiVersion: inc.example.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: second-switch
+spec:
+  arch: bmv2
+  controllerPort: 1
+  p4RuntimePort: 9559
+  links:
+    - type: inc
+      peerName: incswitch-sample
+      port: 1
+      ipv4: "2.1.1.1"
+    - type: node
+      peerName: anotherNode
+      port: 2
+      ipv4: "3.1.1.1"

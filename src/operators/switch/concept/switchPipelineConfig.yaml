@@ -1,0 +1,26 @@
+apiVersion: inc.example.com/v1alpha1
+kind: SwitchPipelineConfig
+metadata:
+  name: mySwitchPipelineConfig
+spec:
+  switch:
+    label: mySwitch
+  baseEntries:
+    tables:
+      table1:
+        entries:
+          - match: ...
+            action: ...
+          - match: ...
+            action: ...
+      table2:
+        entries:
+          - match: ...
+            action: ...
+  programSpecificEntries:
+    tables:
+      table1:
+        entries:
+          - match: ...
+            action: ...
+      table2: ..

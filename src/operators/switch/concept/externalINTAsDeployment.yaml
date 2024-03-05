@@ -1,0 +1,31 @@
+apiVersion: inc.example.com/v1alpha1
+kind: InternalTelemetryDeployment
+metadata:
+  name: webAppIntedDeployment
+spec:
+  deploymentSpec: ...
+  requiredProgram: programName # when building compatibility graph controller will consider only devices with this program installed
+  collector:
+    selector:
+      label: myCollector
+    config: ...
+  monitorFromInternetToPods: true
+  monitorFromPodsToInternet: true
+  requireAtLeastIntDevices: 50% # e.g. if we have 4 layers of switches in the tree we need at least 2 with enabled INT
+
+# scheduler would take cluster graph, pick feasible nodes (filter scheduler stage?), then normal scheduler will pick the best of them
+
+# OR controller would take cluster graph and set affinity prior to scheduling (better?)
+# can node labels be assigned to all feasible nodes, eg: canHostWebAppIntedDeployment: true, then for pods we will add nodeSelector: canHostWebAppIntedDeployment: true
+# but that may be inefficient, other option is to have nodes pre-labeled, eg: connectedToLeafSwitch: s1, then we would set connectedToLeafSwitch in (s_x, s_y, s_z)
+# problem: large cluster and a lot of feasbile nodes, order of 1000, affinity would be huge
+
+# kubectl describe intdepl webAppIntedDeployment should print:
+# switchA:
+#   - averageLatency: 123
+#   - averageQueueFillState: 90%
+# switchB: ...
+
+# then we could claim that we could have other controller that would monitor those metrics and migrate pods
+
+# also remember about multi-path situations

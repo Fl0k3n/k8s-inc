@@ -1,0 +1,12 @@
+apiVersion: inc.example.com/v1alpha1
+kind: ExternalINT
+metadata:
+  labels:
+    app.kubernetes.io/name: externalint
+    app.kubernetes.io/instance: externalint-sample
+    app.kubernetes.io/part-of: operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: operator
+  name: externalint-sample
+spec:
+  # TODO(user): Add fields here
