@@ -1,0 +1,29 @@
+apiVersion: inc.example.com/v1alpha1
+kind: Topology # topology aware controllers must watch this change, these should be changed by cluster administrator and/or external sdn tool
+metadata:
+  name: clusterTopology
+spec:
+  graph:
+    - type: IncSwitch
+      name: myIncDevice
+      links:
+        - peerName: someOtherDevice1
+        - peerName: node1
+    - type: clusterExternal
+      name: internet1
+    - type: node
+      name: node1
+      links:
+        - peerName: myIncDevice
+    - type: netDevice
+      name: router1
+      links:
+        - peerName: myIncDevice
+        - peerName: internet1
+
+
+
+- SdnShim will communicate with api server and update this resouce
+- SdnShim should also have api for stuff such as:
+  - requesting paths that lead from deviceX to internet and the other way around
+

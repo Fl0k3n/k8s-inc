@@ -1,0 +1,60 @@
+apiVersion: inc.example.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: myIncSwitch
+spec:
+  arch: bmv2 # this will be used for choosing proper program out of program config and letting controller know how to handle the device
+  programName: someP4Program # switch controller must watch this change and reinstall program if needed
+  resources:
+    memory: 1Gi
+    ...
+status:
+  installedProgram: someP4Program # or different if not reconciled yet
+
+
+this resource should be created by the sdn shim, just as topology, for each device of type IncSwitch in topology CR (first create IncSwitch resources then topology on init),
+each such device should be allowed to be programmed by user, if sdn chooses not to allow programmability then type
+of deivce in topology should be Net. User should be allowed to perform "kubectl get IncSwitches" to see what is installed/installable and where,
+user should be allowed to change programName if he desires to cause program reinstallation. 
+
+sdn shim should be created as a controller in k8s control plane, however other controllers shouldn't communicate with it via
+etcd but directly via grpc API. SDN shim shouldn't also participate in reconciliation, no other software should be allowed to 
+change topology resource, shim should monitor it on its own and write it to etcd on chage.
+SDN shim is the only component that can communicate with SDN directly.
+
+For now let's use embeddedSdnController, which is just a separe goroutine in sdnshim, for simplicity
+controller has to expose lower-level api for installing programs, checking programs, installing table entries, checking table entries,
+checking resources, etc
+
+Maybe create SdnShim CRD and let SdnShim reconcile it, e.g, if there is no SDNShim resource then there is no Programmability enabled,
+once its created the shim controllers inits proper shim (e.g. shim and embedded sdn that bootstraps all). WE DON'T PROVIDE PROGRAMMABILITY
+unless there is Topology resource, creation of SdnShim resource should spin up building devices/topology. Cluster administrator creates
+SDNShim resource himself. There must be at most 1 sdnShim resource.
+
+apiVersion: inc.example.com/v1alpha1
+kind: SDNShim
+metadata:
+  name: embedded-sdn-shim
+spec:
+  sdn: 
+    type: embedded # /onos/ ...
+    otherSdnParams: ifNeeded
+  shimUrl: 0.0.0.0:4234 # where can other controllers access it via grpc
+
+
+on change controller will check if programName == installedProgram, if not it will load program details and:
+  - check if program can be run on arch
+  - switch has enough resources
+if both of this are true controller will begin program installation:
+  - it will communicate with SdnShim and pass it switchName and program data (its name name and binaries)
+  - SdnShim will be responsible for installation (e.g. passing request to proper SndController)
+  - SndController will need to have plugin for that program, the roles of such plugin are:
+      - handling instllation of that program
+      - maintaining routing etc
+      - transltaing new flow requests
+  - SdnShim shall notify the controller that program was installed and controller will update status
+
+
+The shim api:
+  getInstalledProgram(switch) -> program
+  installProgram(switch, program) -> installResponse

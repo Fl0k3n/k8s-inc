@@ -1,0 +1,8 @@
+apiVersion: inc.example.com/v1alpha1
+kind: IntCollector
+metadata:
+  name: myCollector
+spec:
+  config: ...
+  podSpec:
+    image: ...
