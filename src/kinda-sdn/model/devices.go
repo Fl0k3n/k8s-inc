@@ -10,6 +10,14 @@ const (
 	EXTERNAL DeviceType = "external"
 )
 
+type IncSwitchArch string
+
+const (
+	BMv2 IncSwitchArch = "bmv2"
+)
+
+const NO_PROGRAM = "none"
+
 type Link struct {
 	To DeviceName
 	MacAddr string
@@ -47,7 +55,28 @@ func (b *BaseDevice) GetLinks() []*Link {
 
 type IncSwitch struct {
 	BaseDevice
+	Arch IncSwitchArch
 	GrpcUrl string
+	InstalledProgram string
+	AllowClientProgrammability bool
+}
+
+func NewIncSwitch(name DeviceName, links []*Link, arch IncSwitchArch,
+		grpcUrl string, installedProgram string, allowClientProgrammability bool) *IncSwitch {
+	return &IncSwitch{
+		BaseDevice: BaseDevice{
+			Name: name,
+			Links: links,
+		},
+		Arch: arch,
+		GrpcUrl: grpcUrl,
+		InstalledProgram: installedProgram,
+		AllowClientProgrammability: allowClientProgrammability,
+	}
+}
+
+func NewBmv2IncSwitch(name DeviceName, links []*Link, grpcUrl string) *IncSwitch {
+	return NewIncSwitch(name, links, BMv2, grpcUrl, NO_PROGRAM, true)
 }
 
 func (i *IncSwitch) GetType() DeviceType {

@@ -8,6 +8,7 @@ package sdn;
 
 service SdnFrontend {
     rpc GetTopology(google.protobuf.Empty) returns (TopologyResponse) {}
+    rpc GetSwitchDetails(SwitchNames) returns (SwitchDetailsResponse) {}
 }
 
 message Link {
@@ -29,4 +30,18 @@ message Device {
 
 message TopologyResponse {
     repeated Device graph = 1;
+}
+
+message SwitchNames {
+    repeated string names = 1;
+}
+
+message SwitchDetails {
+   string name = 1; 
+   string arch = 2;
+   string installedProgram = 3;
+}
+
+message SwitchDetailsResponse {
+    map<string, SwitchDetails> details = 1;
 }

@@ -31,23 +31,22 @@ const (
 	TERNARY_SEPARATOR = "&&&"
 )
 
-
-// type UintActionParam struct {
-// 	Bitwidth uint
-// 	Number uint
-// }
-
-// type Ipv4ActionParam struct {
-// 	Ipv4 string
-// }
-
-// type MacActionParam struct {
-// 	Mac string
-// }
-
 type ActionEntry struct {
 	Name string
 	Params []ActionParam
+}
+
+type TableEntry struct {
+	TableName string
+	Match MatchEntry
+	Action ActionEntry
+}
+
+type RawTableEntry struct {
+	TableName string
+	Match map[string]string
+	ActionName string
+	ActionParams map[string]string
 }
 
 type MetadataNotFoundError struct {
@@ -232,15 +231,23 @@ func (p *P4RuntimeConnector) BuildMatchEntry(tableName string, rawMatchEntries m
 	return res, nil
 }
 
-func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, tableName string, match MatchEntry, action ActionEntry) error {
-	entry := p.p4rtc.NewTableEntry(
-		tableName,
-		match,
-		p.p4rtc.NewTableActionDirect(action.Name, action.Params),
+
+func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, entry TableEntry) error {
+	defaultPriority := int32(0)
+	for _, matchValue := range entry.Match {
+		if _, isTernary := matchValue.(*client.TernaryMatch); isTernary {
+			defaultPriority = 2147483646 // TODO this is 1 on switch, for some reason it is negated (unsigned 31 bits are negated)
+			break
+		}
+	}
+	pbEntry := p.p4rtc.NewTableEntry(
+		entry.TableName,
+		entry.Match,
+		p.p4rtc.NewTableActionDirect(entry.Action.Name, entry.Action.Params),
 		&client.TableEntryOptions{
-			Priority: 2147483646, // TODO this is 1 on switch, for some reason it is negated (unsigned 31 bits are negated)
+			Priority: defaultPriority,
 			IdleTimeout: 0, // no timeout
 		},
 	)
-	return p.p4rtc.InsertTableEntry(ctx, entry)
+	return p.p4rtc.InsertTableEntry(ctx, pbEntry)
 }

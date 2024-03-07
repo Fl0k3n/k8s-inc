@@ -20,12 +20,21 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type DeviceType string 
+
+const (
+	NODE DeviceType = "node"
+	INC_SWITCH DeviceType = "inc-switch"
+	NET DeviceType = "net"
+	EXTERNAL DeviceType = "external"
+)
+
 type Link struct {
 	PeerName string `json:"peerName"`
 }
 
 type NetworkDevice struct {
-	DeviceType string `json:"type"`
+	DeviceType DeviceType `json:"type"`
 	Name string `json:"name"`
 	Links []Link `json:"links"`
 }

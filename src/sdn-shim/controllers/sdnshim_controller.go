@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -35,6 +36,9 @@ import (
 )
 
 // SDNShimReconciler reconciles a SDNShim object
+
+const ManagedClusterTopologyName = "cluster-topo"
+
 type SDNShimReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
@@ -50,6 +54,17 @@ func (r *SDNShimReconciler) runSdnClient(grpcAddr string) error {
 	return nil
 }
 
+func deviceTypeFromProto(dt pb.DeviceType) incv1alpha1.DeviceType {
+	switch dt {
+	case pb.DeviceType_EXTERNAL:   return incv1alpha1.EXTERNAL
+	case pb.DeviceType_HOST:       return incv1alpha1.NODE
+	case pb.DeviceType_NET: 	   return incv1alpha1.NET
+	case pb.DeviceType_INC_SWITCH: return incv1alpha1.INC_SWITCH
+	default:
+		panic("unsupported device type")
+	}
+}
+
 func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ctrl.Request) *incv1alpha1.Topology {
 	graph := make([]incv1alpha1.NetworkDevice, len(topo.Graph))
 	for i, dev := range topo.Graph {
@@ -61,14 +76,14 @@ func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ct
 		}
 		graph[i] = incv1alpha1.NetworkDevice{
 			Name: dev.Name,
-			DeviceType: dev.DeviceType.String(),
+			DeviceType: deviceTypeFromProto(dev.DeviceType),
 			Links: links,
 		}
 	}
 	
 	res := &incv1alpha1.Topology{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: "cluster-topo",
+			Name: ManagedClusterTopologyName,
 			Namespace: req.Namespace,
 		},
 		Spec: incv1alpha1.TopologySpec{
@@ -81,25 +96,112 @@ func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ct
 	return res
 }
 
-func (r *SDNShimReconciler) reconcileTopology(ctx context.Context, req ctrl.Request) (changed bool, err error) {
+func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails, req ctrl.Request) *incv1alpha1.IncSwitch {
+	res := &incv1alpha1.IncSwitch{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: details.Name,
+			Namespace: req.Namespace,
+		},
+		Spec: incv1alpha1.IncSwitchSpec{
+			Arch: details.Arch,
+			ProgramName: details.InstalledProgram,
+		},
+		Status: incv1alpha1.IncSwitchStatus{
+			InstalledProgram: details.InstalledProgram,
+		},
+	}
+	return res
+}
+
+func (r *SDNShimReconciler) reconcileTopology(ctx context.Context, req ctrl.Request) (topo *incv1alpha1.Topology ,changed bool, err error) {
 	topos := &incv1alpha1.TopologyList{}
 	if err := r.List(ctx, topos); err != nil {
-		return false, err
+		return nil, false, err
 	}
 	if topos.Items == nil || len(topos.Items) == 0 {
 		topo, err := r.sdnClient.GetTopology(ctx, &emptypb.Empty{})
 		if err != nil {
-			return false, err
+			return nil, false, err
 		}
 		topoCr := r.buildClusterTopoCR(topo, req)
 		if err := r.Client.Create(ctx, topoCr); err != nil {
 			log.FromContext(ctx).Error(err, "Failed to create CR")
-			return false, err
+			return nil, false, err
 		}
-		return true, nil
+		return topoCr, true, nil
 	} 
 	log.FromContext(ctx).Info("Topo exists, TODO reconcile it if it may change") // TODO
-	return false, nil
+	return &topos.Items[0], false, nil
+}
+
+func (r *SDNShimReconciler) reconcileIncSwitches(ctx context.Context, req ctrl.Request, topo *incv1alpha1.Topology) error {
+	log := log.FromContext(ctx)
+	switchList := &incv1alpha1.IncSwitchList{}
+	if err := r.List(ctx, switchList); err != nil {
+		return err
+	}
+	desiredSwitchNames := make([]string, 0)
+	for _, dev := range topo.Spec.Graph {
+		if dev.DeviceType == incv1alpha1.INC_SWITCH {
+			desiredSwitchNames = append(desiredSwitchNames, dev.Name)
+		}
+	}
+	switchesToRemove := make([]string, 0)
+	switchesToAdd := make([]string, 0)
+	switchesToCheckState := make([]string, 0)
+
+	if switchList.Items == nil || len(switchList.Items) == 0 {
+		if len(desiredSwitchNames) == 0 {
+			return nil
+		}
+		switchesToAdd = desiredSwitchNames
+	} else {
+		// TODO cache in a faster struture if there can be many
+		for _, presentItem := range switchList.Items {
+			if slices.Contains(desiredSwitchNames, presentItem.Name) {
+				switchesToCheckState = append(switchesToCheckState, presentItem.Name)
+			} else {
+				switchesToRemove = append(switchesToRemove, presentItem.Name)
+			}
+		}
+		for _, desiredItem := range desiredSwitchNames {
+			found := false
+			for _, presentItem := range switchList.Items {
+				if presentItem.Name == desiredItem {
+					found = true
+					break
+				}
+			}
+			if !found {
+				switchesToAdd = append(switchesToAdd, desiredItem)
+			}
+		}
+	}
+
+	if len(switchesToRemove) > 0 {
+		// TODO
+		log.Info("Should delete some switches")
+	}
+	if len(switchesToCheckState) > 0 {
+		log.Info("Should check some switches")
+	}
+	if len(switchesToAdd) > 0 {
+		if details, err := r.sdnClient.GetSwitchDetails(ctx, &pb.SwitchNames{
+			Names: switchesToAdd,
+		}); err != nil {
+			log.Error(err, "Failed to fetch switch details")
+			return err
+		} else {
+			for _, switchDetails := range details.Details {
+				if err := r.Client.Create(ctx, r.buildIncSwitchCR(switchDetails, req)); err != nil {
+					log.Error(err, "Failed to add switch details")
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=sdnshims,verbs=get;list;watch;create;update;patch;delete
@@ -108,6 +210,9 @@ func (r *SDNShimReconciler) reconcileTopology(ctx context.Context, req ctrl.Requ
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches/finalizers,verbs=update
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -128,25 +233,28 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, nil
 	}
 
-	if shimConfig.Spec.SdnConfig.SdnType == "microsdn" {
+	if shimConfig.Spec.SdnConfig.SdnType == incv1alpha1.KindaSDN {
 		if r.sdnClient == nil {
 			if err := r.runSdnClient(shimConfig.Spec.SdnConfig.SdnGrpcAddr); err != nil {
 				log.Error(err, "Failed to connect to SDN controller")
 				return ctrl.Result{}, err
 			}
 		}
-		changed, err := r.reconcileTopology(ctx, req)
+		topo, changed, err := r.reconcileTopology(ctx, req)
 		if err != nil {
 			return ctrl.Result{}, err
 		}
 		if changed {
 			log.Info("Updated topology")
 		}
+		if err := r.reconcileIncSwitches(ctx, req, topo); err != nil {
+			return ctrl.Result{}, err
+		}
 	} else {
 		return ctrl.Result{}, errors.New("unsupported SDN type")
 	}
 	
-
+	log.Info("Reconciled SDNShim")
 	return ctrl.Result{}, nil
 }
 

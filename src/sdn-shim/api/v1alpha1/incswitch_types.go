@@ -28,14 +28,15 @@ type IncSwitchSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	// Foo is an example field of IncSwitch. Edit incswitch_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Arch string `json:"arch"`
+	ProgramName string `json:"programName,omitempty"`
 }
 
 // IncSwitchStatus defines the observed state of IncSwitch
 type IncSwitchStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	InstalledProgram string `json:"installedProgram,omitempty"`
 }
 
 //+kubebuilder:object:root=true

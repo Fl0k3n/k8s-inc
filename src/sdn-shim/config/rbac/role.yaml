@@ -8,6 +8,32 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - incswitches
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - incswitches/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - incswitches/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - sdnshims
   verbs:
   - create

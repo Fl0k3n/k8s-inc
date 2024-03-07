@@ -1,9 +1,9 @@
 apiVersion: inc.kntp.com/v1alpha1
 kind: SDNShim
 metadata:
-  name: microsdn-shim
+  name: kinda-sdn-shim
 spec:
   shimGrpcAddr: "127.0.0.1:9002"
   sdn:
-    type: microsdn
+    type: kinda
     grpcAddr: "127.0.0.1:9001"

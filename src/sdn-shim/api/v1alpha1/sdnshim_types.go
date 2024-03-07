@@ -23,8 +23,14 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type SDNType string 
+
+const (
+	KindaSDN SDNType = "kinda-sdn"
+)
+
 type SDNConfig struct {
-	SdnType string `json:"type"`
+	SdnType SDNType `json:"type"`
 	SdnGrpcAddr string `json:"grpcAddr"`
 	// Params map[string]interface{} `json:"params,omitempty"`
 }

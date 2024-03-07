@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type SdnFrontendClient interface {
 	GetTopology(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TopologyResponse, error)
+	GetSwitchDetails(ctx context.Context, in *SwitchNames, opts ...grpc.CallOption) (*SwitchDetailsResponse, error)
 }
 
 type sdnFrontendClient struct {
@@ -43,11 +44,21 @@ func (c *sdnFrontendClient) GetTopology(ctx context.Context, in *emptypb.Empty, 
 	return out, nil
 }
 
+func (c *sdnFrontendClient) GetSwitchDetails(ctx context.Context, in *SwitchNames, opts ...grpc.CallOption) (*SwitchDetailsResponse, error) {
+	out := new(SwitchDetailsResponse)
+	err := c.cc.Invoke(ctx, "/sdn.SdnFrontend/GetSwitchDetails", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SdnFrontendServer is the server API for SdnFrontend service.
 // All implementations must embed UnimplementedSdnFrontendServer
 // for forward compatibility
 type SdnFrontendServer interface {
 	GetTopology(context.Context, *emptypb.Empty) (*TopologyResponse, error)
+	GetSwitchDetails(context.Context, *SwitchNames) (*SwitchDetailsResponse, error)
 	mustEmbedUnimplementedSdnFrontendServer()
 }
 
@@ -57,6 +68,9 @@ type UnimplementedSdnFrontendServer struct {
 
 func (UnimplementedSdnFrontendServer) GetTopology(context.Context, *emptypb.Empty) (*TopologyResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTopology not implemented")
+}
+func (UnimplementedSdnFrontendServer) GetSwitchDetails(context.Context, *SwitchNames) (*SwitchDetailsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSwitchDetails not implemented")
 }
 func (UnimplementedSdnFrontendServer) mustEmbedUnimplementedSdnFrontendServer() {}
 
@@ -89,6 +103,24 @@ func _SdnFrontend_GetTopology_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SdnFrontend_GetSwitchDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SwitchNames)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SdnFrontendServer).GetSwitchDetails(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sdn.SdnFrontend/GetSwitchDetails",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SdnFrontendServer).GetSwitchDetails(ctx, req.(*SwitchNames))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SdnFrontend_ServiceDesc is the grpc.ServiceDesc for SdnFrontend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -99,6 +131,10 @@ var SdnFrontend_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTopology",
 			Handler:    _SdnFrontend_GetTopology_Handler,
+		},
+		{
+			MethodName: "GetSwitchDetails",
+			Handler:    _SdnFrontend_GetSwitchDetails_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
