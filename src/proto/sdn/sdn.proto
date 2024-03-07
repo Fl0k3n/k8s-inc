@@ -1,0 +1,32 @@
+syntax = "proto3";
+
+import "google/protobuf/empty.proto";
+
+option go_package = "github.com/Fl0k3n/k8s-inc/proto/sdn";
+
+package sdn;
+
+service SdnFrontend {
+    rpc GetTopology(google.protobuf.Empty) returns (TopologyResponse) {}
+}
+
+message Link {
+    string peerName = 1;
+}
+
+enum DeviceType {
+    HOST = 0;
+    INC_SWITCH = 1;
+    NET = 2;
+    EXTERNAL = 3;
+}
+
+message Device {
+    string name = 1;
+    DeviceType deviceType = 2;
+    repeated Link links = 3;
+}
+
+message TopologyResponse {
+    repeated Device graph = 1;
+}

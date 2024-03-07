@@ -20,6 +20,16 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+type Link struct {
+	PeerName string `json:"peerName"`
+}
+
+type NetworkDevice struct {
+	DeviceType string `json:"type"`
+	Name string `json:"name"`
+	Links []Link `json:"links"`
+}
+
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -27,15 +37,14 @@ import (
 type TopologySpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of Topology. Edit topology_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	Graph []NetworkDevice `json:"graph"`
 }
 
 // TopologyStatus defines the observed state of Topology
 type TopologyStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+	CustomStatus string `json:"customStatus"`
 }
 
 //+kubebuilder:object:root=true

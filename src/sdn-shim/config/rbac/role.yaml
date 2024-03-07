@@ -1,0 +1,59 @@
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  creationTimestamp: null
+  name: manager-role
+rules:
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - topologies
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - topologies/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - topologies/status
+  verbs:
+  - get
+  - patch
+  - update
