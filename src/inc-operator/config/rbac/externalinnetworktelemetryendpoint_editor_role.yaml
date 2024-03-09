@@ -1,0 +1,31 @@
+# permissions for end users to edit externalinnetworktelemetryendpoints.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: externalinnetworktelemetryendpoints-editor-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: inc-operator
+    app.kubernetes.io/part-of: inc-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: externalinnetworktelemetryendpoints-editor-role
+rules:
+  - apiGroups:
+      - inc.kntp.com
+    resources:
+      - externalinnetworktelemetryendpoints
+    verbs:
+      - create
+      - delete
+      - get
+      - list
+      - patch
+      - update
+      - watch
+  - apiGroups:
+      - inc.kntp.com
+    resources:
+      - externalinnetworktelemetryendpoints/status
+    verbs:
+      - get

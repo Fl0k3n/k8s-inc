@@ -1,0 +1,12 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: ExternalInNetworkTelemetryEndpoints
+metadata:
+  labels:
+    app.kubernetes.io/name: externalinnetworktelemetryendpoints
+    app.kubernetes.io/instance: externalinnetworktelemetryendpoints-sample
+    app.kubernetes.io/part-of: inc-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: inc-operator
+  name: externalinnetworktelemetryendpoints-sample
+spec:
+  # TODO(user): Add fields here

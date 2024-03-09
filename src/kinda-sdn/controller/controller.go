@@ -37,6 +37,7 @@ func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch) error {
 	if err := bmv2.InstallProgram(binPath, p4infoPath); err != nil{
 		return err
 	}
+	incSwitch.InstalledProgram = "telemetry"
 	entries := k.initialP4Config[incSwitch.Name]
 	if err := bmv2.WriteInitialEntries(ctx, entries); err != nil {
 		return err

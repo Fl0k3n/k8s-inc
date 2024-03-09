@@ -5,5 +5,5 @@ metadata:
 spec:
   shimGrpcAddr: "127.0.0.1:9002"
   sdn:
-    type: kinda
+    type: kinda-sdn
     grpcAddr: "127.0.0.1:9001"

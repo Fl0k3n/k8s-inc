@@ -1,0 +1,27 @@
+# permissions for end users to view externalinnetworktelemetryendpoints.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    app.kubernetes.io/name: clusterrole
+    app.kubernetes.io/instance: externalinnetworktelemetryendpoints-viewer-role
+    app.kubernetes.io/component: rbac
+    app.kubernetes.io/created-by: inc-operator
+    app.kubernetes.io/part-of: inc-operator
+    app.kubernetes.io/managed-by: kustomize
+  name: externalinnetworktelemetryendpoints-viewer-role
+rules:
+  - apiGroups:
+      - inc.kntp.com
+    resources:
+      - externalinnetworktelemetryendpoints
+    verbs:
+      - get
+      - list
+      - watch
+  - apiGroups:
+      - inc.kntp.com
+    resources:
+      - externalinnetworktelemetryendpoints/status
+    verbs:
+      - get

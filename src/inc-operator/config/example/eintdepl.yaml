@@ -1,0 +1,22 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: ExternalInNetworkTelemetryDeployment
+metadata:
+  name: eintdepl
+spec:
+  requiredProgram: telemetry
+  deploymentTemplate:
+    replicas: 1
+    selector:
+      matchLabels:
+        app: example
+    template:
+      metadata:
+        labels:
+          app: example
+      spec:
+        containers:
+          - name: receiver
+            image: flok3n/receiver_tcp:1.0.0
+            command: ["python3", "/receiver_tcp.py", "8959"]
+            ports:
+              - containerPort: 8959
