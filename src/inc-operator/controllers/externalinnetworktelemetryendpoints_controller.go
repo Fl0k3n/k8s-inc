@@ -18,11 +18,14 @@ package controllers
 
 import (
 	"context"
+	"time"
 
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1"
 	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -108,7 +111,7 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) establishStuff(
 	// assumption: both src and target are either node/external devices, 
 	// other devices are either INC or NET
 
-	sourceName := "test-cluster-worker2" // w3 -> w1, w3 initiated, for now
+	sourceName := "test-cluster-worker2" // w1 -> w3, w1 initiated, for now
 	sinks := newDependingEntries[Edge]()
 	sources := newDependingEntries[Edge]()
 	transits := newDependingEntries[string]()
@@ -184,6 +187,63 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) establishStuff(
 // 	}
 // }
 
+func (r *ExternalInNetworkTelemetryEndpointsReconciler) buildEnableTelemetryRequestIfChangeDetected(
+	ctx context.Context,
+	endpoints *incv1alpha1.ExternalInNetworkTelemetryEndpoints,
+) (*pbt.EnableTelemetryRequest, bool) {
+	targetDevices := map[string]struct{}{}
+	changed := false
+
+	for _, entry := range endpoints.Spec.Entries {
+		if entry.EntryStatus == incv1alpha1.EP_READY {
+			targetDevices[entry.NodeName] = struct{}{}
+		} else if entry.EntryStatus == incv1alpha1.EP_TERMINATING {
+			changed = true
+		} else if entry.EntryStatus == incv1alpha1.EP_PENDING {
+			changed = true
+			targetDevices[entry.NodeName] = struct{}{}
+		}
+	}
+	if !changed {
+		return nil, false
+	}
+
+	sourceNodeName, err := shimutils.GetNameOfNodeWithSname(ctx, r.Client, "w1")
+	if err != nil {
+		panic(err)
+	}
+
+	targetDeviceNames := make([]string, 0, len(targetDevices))
+	for devName := range targetDevices {
+		targetDeviceNames = append(targetDeviceNames, devName)
+	}
+	return &pbt.EnableTelemetryRequest{
+		ProgramName: endpoints.Spec.ProgramName,
+		CollectionId: endpoints.Name,
+		CollectorNodeName: endpoints.Spec.CollectorNodeName,
+		CollectorPort: 6000,
+		Sources: &pbt.EnableTelemetryRequest_RawSources{
+			RawSources: &pbt.RawTelemetryEntities{
+				DeviceNames: []string{sourceNodeName},
+			},
+		},
+		Targets: &pbt.EnableTelemetryRequest_RawTargets{
+			RawTargets: &pbt.RawTelemetryEntities{
+				DeviceNames: targetDeviceNames,
+			},
+		},
+	}, true
+}
+
+func (r *ExternalInNetworkTelemetryEndpointsReconciler) withTelemetryClient(grpcAddr string, consumer func(pbt.TelemetryServiceClient) error) error {
+	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	return consumer(pbt.NewTelemetryServiceClient(conn))
+}
+
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
 // TODO(user): Modify the Reconcile function to compare the state specified by
@@ -217,25 +277,41 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) Reconcile(ctx context.Co
 		log.Error(err, "Failed to load topology")
 		return ctrl.Result{}, err
 	}
+	_ = topo
 	_ = shim
 
-	r.establishStuff(topo, endpoints.Spec.Entries, "telemetry")
-	pbt.NewTelemetryServiceClient(nil)
-	req := &pbt.EnableTelemetryRequest{
-		ProgramName: "telemetry",
-		CollectionId: endpoints.Name,
-		CollectorNodeName: "?",
-		CollectorPort: 6000,
-		Sources: &pbt.EnableTelemetryRequest_RawSources{
-			RawSources: &pbt.RawTelemetryEntities{
-				DeviceNames: []string{"w3"},
-			},
-		},
-		Targets: &pbt.EnableTelemetryRequest_RawTargets{
-			RawTargets: &pbt.RawTelemetryEntities{
-				DeviceNames: []string{"w1"},
-			},
-		},
+	if enableTelemetryRequest, stateChanged := r.buildEnableTelemetryRequestIfChangeDetected(ctx, endpoints); stateChanged {
+		var resp *pbt.EnableTelemetryResponse
+		err = r.withTelemetryClient(shim.Spec.SdnConfig.TelemetryServiceGrpcAddr, func(tsc pbt.TelemetryServiceClient) error {
+			enableResp, err := tsc.EnableTelemetry(ctx, enableTelemetryRequest)
+			if err != nil {
+				return err
+			}
+			resp = enableResp
+			return nil
+		})	
+		if err != nil {
+			log.Error(err, "Failed to make enable telemetry request")
+			return ctrl.Result{}, err
+		}
+		switch resp.TelemetryState {
+		case pbt.TelemetryState_IN_PROGRESS:
+			log.Info("Enabling telemetry is in progress")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		case pbt.TelemetryState_FAILED:
+			log.Info("Failed to set telemetry")
+			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
+		case pbt.TelemetryState_OK:
+			for i := range endpoints.Spec.Entries {
+				endpoints.Spec.Entries[i].EntryStatus = incv1alpha1.EP_READY
+			}
+			if err := r.Update(ctx, endpoints); err != nil {
+				log.Error(err, "Failed to update endpoints even though request went through")	
+				return ctrl.Result{}, err
+			}
+		default:
+			panic("unexpected telemetry state")
+		}
 	}
 
 	return ctrl.Result{}, nil

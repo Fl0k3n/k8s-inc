@@ -11,6 +11,7 @@ import (
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/telemetry"
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
+	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	"google.golang.org/grpc"
 )
 
@@ -21,6 +22,7 @@ func runServer(frontend *controller.KindaSdn, grpcAddr string) error {
 	}
 	server := grpc.NewServer()
 	pb.RegisterSdnFrontendServer(server, frontend)
+	pbt.RegisterTelemetryServiceServer(server, frontend)
 	return server.Serve(lis)
 }
 

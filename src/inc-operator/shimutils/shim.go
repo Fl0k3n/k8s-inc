@@ -3,6 +3,7 @@ package shimutils
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
 	v1 "k8s.io/api/core/v1"
@@ -55,4 +56,20 @@ func LoadSwitches(ctx context.Context, client client.Client) (map[string]*shimv1
 		res[s.Name] = &s
 	}
 	return res, nil
+}
+
+// TODO this is just for testing
+func GetNameOfNodeWithSname(ctx context.Context, client client.Client, sname string) (string, error) {
+	nodeList := &v1.NodeList{}
+	if err := client.List(ctx, nodeList); err != nil {
+		return "", err
+	}
+	for _, node := range nodeList.Items {
+		if sn, ok := node.Labels["sname"]; ok {
+			if sn == sname {
+				return node.GetName(), nil
+			}
+		}
+	}
+	return "", fmt.Errorf("no node with sname %s", sname)
 }

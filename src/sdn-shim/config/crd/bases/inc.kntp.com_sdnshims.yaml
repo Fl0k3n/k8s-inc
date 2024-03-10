@@ -39,17 +39,16 @@ spec:
                 properties:
                   grpcAddr:
                     type: string
+                  telemetryServiceGrpcAddr:
+                    type: string
                   type:
                     type: string
                 required:
                 - grpcAddr
                 - type
                 type: object
-              shimGrpcAddr:
-                type: string
             required:
             - sdn
-            - shimGrpcAddr
             type: object
           status:
             description: SDNShimStatus defines the observed state of SDNShim

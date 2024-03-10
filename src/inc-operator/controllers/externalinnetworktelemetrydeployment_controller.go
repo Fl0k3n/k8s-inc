@@ -100,9 +100,8 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) pickFeasibleNodes(
 	}
 
 	// return sname labels
-	return []string{"w1"}, nil
+	return []string{"w3"}, nil
 }
-
 
 func (r *ExternalInNetworkTelemetryDeploymentReconciler) reconcileEndpoints(
 		ctx context.Context,
@@ -265,6 +264,11 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 	managedEndpointsKey := client.ObjectKey{Name: req.Name, Namespace: req.Namespace}
 	if err := r.Get(ctx, managedEndpointsKey, managedEndpoints); err != nil {
 		if apierrors.IsNotFound(err) {
+			collectorNodeName, err := shimutils.GetNameOfNodeWithSname(ctx, r.Client, "w2") // TODO
+			if err != nil {
+				log.Error(err, "collector")
+				return ctrl.Result{}, err
+			}
 			eps := &incv1alpha1.ExternalInNetworkTelemetryEndpoints{
 				ObjectMeta: metav1.ObjectMeta{
 					Name: managedEndpointsKey.Name,
@@ -272,7 +276,8 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 				},
 				Spec: incv1alpha1.ExternalInNetworkTelemetryEndpointsSpec{
 					Entries: []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry{},
-					CollectorIpv4: "10.1.1.1", // TODO
+					CollectorNodeName: collectorNodeName,
+					ProgramName: eintDepl.Spec.RequiredProgram,
 				},
 			}
 			if err := controllerutil.SetControllerReference(eintDepl, eps, r.Scheme); err != nil {

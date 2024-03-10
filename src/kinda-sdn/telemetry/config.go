@@ -89,28 +89,6 @@ func AnyIpv4Ternary() string {
 	return "0.0.0.0&&&0x0"
 }
 
-func ConfigureSourceAnyPort(
-	srcAddr string, dstAddr string,
-	maxHop int, hopMetadataLen int, insCnt int, insMask int,
-) connector.RawTableEntry {
-	return connector.RawTableEntry{
-		TableName: "tb_int_source",
-		Match: map[string]string{
-			"hdr.ipv4.srcAddr": srcAddr,
-			"hdr.ipv4.dstAddr": dstAddr,
-			"meta.layer34_metadata.l4_src": "0x0&&&0x0",
-			"meta.layer34_metadata.l4_dst": "0x0&&&0x0",
-		},
-		ActionName: "configure_source",
-		ActionParams: map[string]string{
-			"max_hop": fmt.Sprintf("%d", maxHop),
-			"hop_metadata_len": fmt.Sprintf("%d", hopMetadataLen),
-			"ins_cnt": fmt.Sprintf("%d", insCnt),
-			"ins_mask": fmt.Sprintf("%d", insMask),
-		},
-	}
-}
-
 func ConfigureSink(egressPort int, sinkReportingPort int) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_int_sink",

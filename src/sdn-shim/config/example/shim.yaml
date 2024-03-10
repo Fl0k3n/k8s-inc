@@ -3,7 +3,7 @@ kind: SDNShim
 metadata:
   name: kinda-sdn-shim
 spec:
-  shimGrpcAddr: "127.0.0.1:9002"
   sdn:
     type: kinda-sdn
     grpcAddr: "127.0.0.1:9001"
+    telemetryServiceGrpcAddr: "127.0.0.1:9001"

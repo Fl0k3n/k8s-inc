@@ -44,7 +44,8 @@ type ExternalInNetworkTelemetryEndpointsSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 	Entries []ExternalInNetworkTelemetryEndpointsEntry `json:"entries"`
-	CollectorIpv4 string `json:"collectorIpv4"` 
+	CollectorNodeName string `json:"collectorNodeName"`
+	ProgramName string `json:"programName"`
 }
 
 // ExternalInNetworkTelemetryEndpointsStatus defines the observed state of ExternalInNetworkTelemetryEndpoints

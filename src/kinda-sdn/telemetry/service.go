@@ -89,9 +89,21 @@ func (t *TelemetryService) EnableTelemetry(
 		if !ok {
 			panic("no such neighbor")
 		}
-		portToCollector := t.findPortLeadingToDevice(G, G[sink.from], G[req.CollectorNodeName])
+		collector := G[req.CollectorNodeName]
+		portToCollector := t.findPortLeadingToDevice(G, G[sink.from], collector)
 
-		if err := t.writeEntryIgnoringDuplicateError(device, ConfigureSink(portNumber, portToCollector)); err != nil {
+		if err := t.writeEntryIgnoringDuplicateError(device, ConfigureSink(portNumber + 1, portToCollector + 1)); err != nil {
+			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
+		}
+
+		nextHopToCollector := G[deviceMeta.GetLinks()[portToCollector].To]
+		nextHopToCollectorMac := nextHopToCollector.MustGetLinkTo(deviceMeta.Name).MacAddr
+
+		portToSink := t.findPortLeadingToDevice(G, collector, G[sink.from])
+		if err := t.writeEntryIgnoringDuplicateError(device, Reporting(
+			deviceMeta.GetLinks()[portToCollector].MacAddr, deviceMeta.GetLinks()[portToCollector].Ipv4,
+			nextHopToCollectorMac, collector.GetLinks()[portToSink].Ipv4, int(req.CollectorPort),
+		)); err != nil {
 			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
 		}
 	}
@@ -103,13 +115,13 @@ func (t *TelemetryService) EnableTelemetry(
 		if !ok {
 			panic("no such neighbor")
 		}
-		if err := t.writeEntryIgnoringDuplicateError(device, ActivateSource(portToActivate)); err != nil {
+		if err := t.writeEntryIgnoringDuplicateError(device, ActivateSource(portToActivate + 1)); err != nil {
 			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
 		}
-		// TODO ports, for now let's do any port
+		// TODO ports
 		for _, ipPair := range ipPairs {
-			if err := t.writeEntryIgnoringDuplicateError(device, ConfigureSourceAnyPort(
-				ipPair.src, ipPair.dst, 4, 10, 8, 0xFF00,
+			if err := t.writeEntryIgnoringDuplicateError(device, ConfigureSource(
+				ipPair.src, ipPair.dst, 4607, 8959, 4, 10, 8, 0xFF00,
 			)); err != nil {
 				return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
 			}
@@ -189,31 +201,31 @@ func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.EnableTeleme
 			if len(reversedPath) == 0 {
 				panic("no path")
 			}
-			i := 1
-			for ; i < len(reversedPath); i++ {
+			i := len(reversedPath) - 2
+			for ; i >= 0; i-- {
 				if t.isCompatible(G[reversedPath[i]], req.ProgramName) {
 					break
 				}
 			}
-			if i >= len(reversedPath) {
+			if i < 0 {
 				continue
 			}
 			sourceDev := reversedPath[i]
-			j := len(reversedPath) - 2
-			for ; j >= i; j-- {
+			j := 1
+			for ; j <= i; j++ {
 				if t.isCompatible(G[reversedPath[j]], req.ProgramName) {
 					break
 				}
 			}
 			sinkDev := reversedPath[j]
-			for k := i + 1; k < j; k++ {
+			for k := j + 1; k < i; k++ {
 				dev := G[reversedPath[k]]
 				if t.isCompatible(dev, req.ProgramName) {
 					res.Transits[dev.GetName()] = struct{}{}
 				}
 			}
-			res.Sinks[Edge{from: sinkDev, to: reversedPath[j+1]}] = struct{}{}
-			sourceEdge := Edge{from: reversedPath[i - 1], to: sourceDev}
+			res.Sinks[Edge{from: sinkDev, to: reversedPath[j-1]}] = struct{}{}
+			sourceEdge := Edge{from: sourceDev, to: reversedPath[i+1]}
 			ipPair := TernaryIpPair{}
 			if G[source].GetType() == model.EXTERNAL {
 				ipPair.src = AnyIpv4Ternary()

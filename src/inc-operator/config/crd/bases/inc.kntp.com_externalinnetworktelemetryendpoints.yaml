@@ -37,7 +37,7 @@ spec:
             description: ExternalInNetworkTelemetryEndpointsSpec defines the desired
               state of ExternalInNetworkTelemetryEndpoints
             properties:
-              collectorIpv4:
+              collectorNodeName:
                 type: string
               entries:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -117,9 +117,12 @@ spec:
                   - podReference
                   type: object
                 type: array
+              programName:
+                type: string
             required:
-            - collectorIpv4
+            - collectorNodeName
             - entries
+            - programName
             type: object
           status:
             description: ExternalInNetworkTelemetryEndpointsStatus defines the observed

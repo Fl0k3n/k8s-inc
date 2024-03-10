@@ -32,6 +32,7 @@ const (
 type SDNConfig struct {
 	SdnType SDNType `json:"type"`
 	SdnGrpcAddr string `json:"grpcAddr"`
+	TelemetryServiceGrpcAddr string `json:"telemetryServiceGrpcAddr,omitempty"`
 	// Params map[string]interface{} `json:"params,omitempty"`
 }
 
@@ -40,7 +41,6 @@ type SDNShimSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	ShimGrpcAddr string `json:"shimGrpcAddr"`
 	SdnConfig SDNConfig `json:"sdn"`
 }
 
