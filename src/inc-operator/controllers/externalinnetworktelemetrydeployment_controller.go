@@ -64,6 +64,10 @@ type ExternalInNetworkTelemetryDeploymentReconciler struct {
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=topologies/finalizers,verbs=update
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=nodes,verbs=get;list;watch
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=nodes/status,verbs=get;
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches,verbs=get;list;watch
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches/status,verbs=get;
 
 
 const POD_EINT_DEPL_OWNER_LABEL = "inc.kntp.com/deployed-by"
@@ -76,15 +80,15 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) pickFeasibleNodes(
 	log := log.FromContext(ctx)
 	_ = topo
 	_ = req
-	incSwitches := &shimv1alpha1.IncSwitchList{}
-	if err := r.List(ctx, incSwitches); err != nil {
+	incSwitches, err := shimutils.LoadSwitches(ctx, r.Client)
+	if err != nil {
 		log.Error(err, "Failed to load inc switches")
 		return nil, err
 	}
 
 	// TODO proper selection logic
 	hasOneWithProgram := false
-	for _, incSwitch := range incSwitches.Items {
+	for _, incSwitch := range incSwitches {
 		// if incSwitch.Status.InstalledProgram == programName { TODO
 		if incSwitch.Spec.ProgramName == programName {
 			hasOneWithProgram = true
@@ -95,6 +99,7 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) pickFeasibleNodes(
 		return []string{}, nil
 	}
 
+	// return sname labels
 	return []string{"w1"}, nil
 }
 
@@ -199,12 +204,12 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: eintDepl.Name}, deploy); err != nil {
 		if apierrors.IsNotFound(err) {
 
-			feasibleNodes, err := r.pickFeasibleNodes(ctx, topo, req, eintDepl.Spec.RequiredProgram)
+			feasibleNodesSnames, err := r.pickFeasibleNodes(ctx, topo, req, eintDepl.Spec.RequiredProgram)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			if len(feasibleNodes) == 0 {
+			if len(feasibleNodesSnames) == 0 {
 				log.Info("No feasible nodes")
 				return ctrl.Result{}, nil
 			}
@@ -220,7 +225,7 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 									{
 										Key: "sname",
 										Operator: "In",
-										Values:	feasibleNodes,
+										Values:	feasibleNodesSnames,
 									},
 								},
 							},

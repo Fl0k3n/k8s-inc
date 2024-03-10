@@ -86,6 +86,34 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - incswitches
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - incswitches/status
+  verbs:
+  - get
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - nodes
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - nodes/status
+  verbs:
+  - get
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - pods
   verbs:
   - create
@@ -131,6 +159,32 @@ rules:
   - inc.kntp.com
   resources:
   - replicasets/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - sdnshims/status
   verbs:
   - get
   - patch

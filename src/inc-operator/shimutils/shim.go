@@ -5,6 +5,7 @@ import (
 	"errors"
 
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
+	v1 "k8s.io/api/core/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -30,4 +31,28 @@ func LoadTopology(ctx context.Context, client client.Client) (*shimv1alpha1.Topo
 		return nil, errors.New("topology unavailable")
 	}
 	return &topos.Items[0], nil
+}
+
+func LoadNodes(ctx context.Context, client client.Client) (map[string]*v1.Node, error) {
+	nodes := &v1.NodeList{}
+	if err := client.List(ctx, nodes); err != nil {
+		return nil, err
+	}
+	res := map[string]*v1.Node{}
+	for _, n := range nodes.Items {
+		res[n.Name] = &n
+	}
+	return res, nil
+}
+
+func LoadSwitches(ctx context.Context, client client.Client) (map[string]*shimv1alpha1.IncSwitch, error) {
+	switches := &shimv1alpha1.IncSwitchList{}
+	if err := client.List(ctx, switches); err != nil {
+		return nil, err
+	}
+	res := map[string]*shimv1alpha1.IncSwitch{}
+	for _, s := range switches.Items {
+		res[s.Name] = &s
+	}
+	return res, nil
 }

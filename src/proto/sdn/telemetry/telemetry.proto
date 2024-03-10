@@ -1,0 +1,85 @@
+syntax = "proto3";
+
+option go_package = "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry";
+
+package telemetry;
+
+service TelemetryService {
+    rpc EnableTelemetry(EnableTelemetryRequest) returns (EnableTelemetryResponse) {}
+}
+
+message EnableTelemetryRequest {
+    string programName = 1;
+    string collectionId = 2;
+    string collectorNodeName = 3;
+    int32 collectorPort = 4;
+    oneof sources {
+        RawTelemetryEntities rawSources = 5;
+        TunneledTelemetryEntities tunneledSources = 6;
+    }
+    oneof targets {
+        RawTelemetryEntities rawTargets = 7;
+        TunneledTelemetryEntities tunneledTargets = 8;
+    }
+}
+
+message TunneledTelemetryEntities {
+    map<string, TunneledEntity> deviceNamesWithEntities = 1;
+}
+
+message TunneledEntity {
+    string ipv4 = 1;
+}
+
+message RawTelemetryEntities {
+    repeated string deviceNames = 1;
+}
+
+enum TelemetryState {
+    OK = 0;
+    IN_PROGRESS = 1;
+    FAILED = 2;
+}
+
+message EnableTelemetryResponse {
+    TelemetryState telemetryState = 1;
+    optional string description = 2;
+}
+
+// EnableReq: (also sent on updating)
+// {
+//     programName // just to make sure what devices should be affected 
+//     entityId // this is id of eintdepl, so that once we get different request for the same entityId (e.g. different tunelledIp) we can lookup what changed and apply only those changes
+//     collectorIp
+//     collectorPort
+//     source: {
+//         tunnelled: false
+//         devices: [dev1, dev2] 
+//         sourceIp, sourcePort (ternary, for internet any, any)
+//     },
+//     target: {
+//         tunnelled: true // if tunneled is set to true instead of matching on Ip addr we should match on embedded adr
+//         devices: [devA, debB, devC] // nodes
+//         tunneledIps: [ip1, ip2]
+//     }
+// } 
+// - figure out transits, sources and sinks
+// - monitor state where telemetry is already configured
+// - write rules to turn selected devices into t/src/sink
+// - we take this request as is, we don't care how many intermediate switches are there, our job is only to setup transit/source/sink where possible, so for each path devX-devY we find first INC switch and make it source, for every succeding we make it a transit and the last one is marked as sink 
+
+// DeleteReq 
+// {
+//     entityId // free all
+// }
+
+// Resp:
+// {
+//     state: {
+//         oneof:
+//             OK - telemetry for this request is done
+//             Progressing - controller holds lock for this setup and isn't done yet
+//             Failed - we failed for whatever reason
+//     }
+// }
+

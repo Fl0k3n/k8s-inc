@@ -21,6 +21,7 @@ import (
 
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1"
 	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
+	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -64,7 +65,7 @@ func getSwitchIds(topo *shimv1alpha1.Topology) map[string]int {
 	return res
 }
 
-func dfs(G map[string]*shimv1alpha1.NetworkDevice, target string, cur string, reversedPath *[]string, visited map[string]bool) {
+func dfs(G map[string]shimv1alpha1.NetworkDevice, target string, cur string, reversedPath *[]string, visited map[string]bool) {
 	visited[cur] = true
 	if cur == target {
 		*reversedPath = append(*reversedPath, cur)
@@ -82,6 +83,24 @@ func dfs(G map[string]*shimv1alpha1.NetworkDevice, target string, cur string, re
 	}
 }
 
+type DependingEntries [T comparable] struct {
+	Entries map[T][]incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry
+} 
+
+func newDependingEntries[T comparable]() *DependingEntries[T] {
+	return &DependingEntries[T]{
+		Entries: make(map[T][]incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry),
+	}
+}
+
+func (d *DependingEntries[T]) addDependency(key T, entry incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry) {
+	if e, ok := d.Entries[key]; ok {
+		d.Entries[key] = append(e, entry)
+	} else {
+		d.Entries[key] = []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry{entry}
+	}
+}
+
 func (r *ExternalInNetworkTelemetryEndpointsReconciler) establishStuff(
 		topo *shimv1alpha1.Topology,
 		entries []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry,
@@ -89,10 +108,10 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) establishStuff(
 	// assumption: both src and target are either node/external devices, 
 	// other devices are either INC or NET
 
-	sourceName := "w3" // w3 -> w1, w3 initiated, for now
-	sinks := map[Edge]bool{}
-	sources := map[Edge][]incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry{}
-	transitCounter := map[string]int{}
+	sourceName := "test-cluster-worker2" // w3 -> w1, w3 initiated, for now
+	sinks := newDependingEntries[Edge]()
+	sources := newDependingEntries[Edge]()
+	transits := newDependingEntries[string]()
 	switchIds := getSwitchIds(topo)
 	G := shimutils.TopologyToGraph(topo)
 
@@ -130,22 +149,40 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) establishStuff(
 				for k := i + 1; k < j; k++ {
 					dev := G[reversedPath[k]]
 					if dev.DeviceType == shimv1alpha1.INC_SWITCH /* && program == telemetry */ {
-						transitCounter[dev.Name]++
+						transits.addDependency(dev.Name, entry)
 					}
 				}
-				sinks[Edge{from: sinkDev, to: reversedPath[j+1]}] = true
-				sourceEdge := Edge{from: reversedPath[i - 1], to: sourceDev}
-				if curEntries, ok := sources[sourceEdge]; ok {
-					sources[sourceEdge] = append(curEntries, entry)
-				} else {
-					sources[sourceEdge] = []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry{entry}
-				}
+				sinks.addDependency(Edge{from: sinkDev, to: reversedPath[j+1]}, entry)
+				sources.addDependency(Edge{from: reversedPath[i - 1], to: sourceDev}, entry)
 			}
 		}
 	}
 
+
+
 	_ = switchIds
 }
+
+// func (r *ExternalInNetworkTelemetryEndpointsReconciler) handleEntriesReconciliation(
+// 	endpointsResource incv1alpha1.ExternalInNetworkTelemetryEndpoints,
+// 	entries []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry,
+// 	sinks DependingEntries[Edge],
+// 	sources DependingEntries[Edge],
+// 	transits DependingEntries[string],
+// ) error {
+// 	shimService := shimutils.NewSdnShimService()
+// 	failures := map[string]struct{}{}
+
+// 	for switchName, entry := range transits.Entries {
+// 		shimService.AssertIsTransit()
+// 	}
+
+// 	for i, entry := range entries {
+// 		if entry.EntryStatus == incv1alpha1.EP_PENDING {
+// 			entries[i].EntryStatus = incv1alpha1.EP_READY
+// 		}
+// 	}
+// }
 
 // Reconcile is part of the main kubernetes reconciliation loop which aims to
 // move the current state of the cluster closer to the desired state.
@@ -183,6 +220,23 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) Reconcile(ctx context.Co
 	_ = shim
 
 	r.establishStuff(topo, endpoints.Spec.Entries, "telemetry")
+	pbt.NewTelemetryServiceClient(nil)
+	req := &pbt.EnableTelemetryRequest{
+		ProgramName: "telemetry",
+		CollectionId: endpoints.Name,
+		CollectorNodeName: "?",
+		CollectorPort: 6000,
+		Sources: &pbt.EnableTelemetryRequest_RawSources{
+			RawSources: &pbt.RawTelemetryEntities{
+				DeviceNames: []string{"w3"},
+			},
+		},
+		Targets: &pbt.EnableTelemetryRequest_RawTargets{
+			RawTargets: &pbt.RawTelemetryEntities{
+				DeviceNames: []string{"w1"},
+			},
+		},
+	}
 
 	return ctrl.Result{}, nil
 }

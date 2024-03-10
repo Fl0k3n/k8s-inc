@@ -3,12 +3,18 @@ module github.com/Fl0k3n/k8s-inc/inc-operator
 go 1.21.7
 
 require (
+	github.com/Fl0k3n/k8s-inc/proto v0.0.1
 	github.com/Fl0k3n/k8s-inc/sdn-shim v0.0.0
 	github.com/onsi/ginkgo/v2 v2.6.0
 	github.com/onsi/gomega v1.24.1
 	k8s.io/apimachinery v0.26.1
 	k8s.io/client-go v0.26.1
 	sigs.k8s.io/controller-runtime v0.14.1
+)
+
+require (
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
+	google.golang.org/grpc v1.62.1 // indirect
 )
 
 replace github.com/Fl0k3n/k8s-inc/sdn-shim => ../sdn-shim

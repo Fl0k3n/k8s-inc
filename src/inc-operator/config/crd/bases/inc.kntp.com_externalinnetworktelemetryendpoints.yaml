@@ -37,11 +37,17 @@ spec:
             description: ExternalInNetworkTelemetryEndpointsSpec defines the desired
               state of ExternalInNetworkTelemetryEndpoints
             properties:
+              collectorIpv4:
+                type: string
               entries:
                 description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
                   Important: Run "make" to regenerate code after modifying this file'
                 items:
                   properties:
+                    entryStatus:
+                      type: string
+                    nodeName:
+                      type: string
                     podReference:
                       description: "ObjectReference contains enough information to
                         let you inspect or modify the referred object. --- New uses
@@ -106,10 +112,13 @@ spec:
                       type: object
                       x-kubernetes-map-type: atomic
                   required:
+                  - entryStatus
+                  - nodeName
                   - podReference
                   type: object
                 type: array
             required:
+            - collectorIpv4
             - entries
             type: object
           status:

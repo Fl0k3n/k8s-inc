@@ -2,6 +2,7 @@ package generated
 
 import (
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	t "github.com/Fl0k3n/k8s-inc/kinda-sdn/telemetry"
 	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
 )
 
@@ -78,61 +79,55 @@ func V3_grpc_topo() *model.Topology {
 	}
 }
 
-func forward(ip string, srcMac string, dstMac string, port string) connector.RawTableEntry {
-	return connector.RawTableEntry{
-		TableName: "ingress.Forward.ipv4_lpm",
-		Match: map[string]string{
-			"hdr.ipv4.dstAddr": ip,
-		},
-		ActionName: "ingress.Forward.ipv4_forward",
-		ActionParams: map[string]string{
-			"srcAddr": srcMac,
-			"dstAddr": dstMac,
-			"port": port,
-		},
-	}
-}
-
-func arp(ip string, mac string) connector.RawTableEntry {
-	return connector.RawTableEntry{
-		TableName: "ingress.Forward.arp_exact",
-		Match: map[string]string{
-			"hdr.arp.dstIp": ip,
-		},
-		ActionName: "ingress.Forward.reply_arp",
-		ActionParams: map[string]string{
-			"targetMac": mac,
-		},
-	}
-}
-
-func V3_grpc_p4_conf_raw() map[model.DeviceName][]connector.RawTableEntry {
-	return map[model.DeviceName][]connector.RawTableEntry {
+func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connector.RawTableEntry {
+	res := map[model.DeviceName][]connector.RawTableEntry {
 		"r1": {
-			forward("10.10.0.2/32", "00:00:0a:00:00:06", "00:00:0a:00:00:01", "2"),
-			forward("10.10.2.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
-			forward("10.10.3.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
-			forward("10.10.4.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
-			forward("10.10.5.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
-			arp("10.10.0.1", "00:00:0a:00:00:06"),
+			t.Forward("10.10.0.2/32", "00:00:0a:00:00:06", "00:00:0a:00:00:01", "2"),
+			t.Forward("10.10.2.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Forward("10.10.3.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Forward("10.10.4.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Forward("10.10.5.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Arp("10.10.0.1", "00:00:0a:00:00:06"),
 		},
 		"r2": {
-			forward("10.10.2.2/32", "00:00:0a:00:00:09", "00:00:0a:00:00:03", "3"),
-			forward("10.10.0.0/24", "00:00:0a:00:00:07", "00:00:0a:00:00:05", "1"),
-			forward("10.10.4.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
-			forward("10.10.5.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
-			arp("10.10.0.1", "00:00:0a:00:00:06"),
+			t.Forward("10.10.2.2/32", "00:00:0a:00:00:09", "00:00:0a:00:00:02", "3"),
+			t.Forward("10.10.0.0/24", "00:00:0a:00:00:07", "00:00:0a:00:00:05", "1"),
+			t.Forward("10.10.3.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			t.Forward("10.10.4.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			t.Forward("10.10.5.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			t.Arp("10.10.2.1", "00:00:0a:00:00:09"),
 		},
 		"r3": {
-			forward("10.10.4.2/32", "00:00:0a:00:00:0b", "00:00:0a:00:00:03", "2"),
-			forward("10.10.5.2/32", "00:00:0a:00:00:0c", "00:00:0a:00:00:04", "3"),
-			forward("10.10.0.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
-			forward("10.10.1.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
-			forward("10.10.2.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
-			arp("10.10.4.1", "00:00:0a:00:00:0b"),
-			arp("10.10.5.1", "00:00:0a:00:00:0c"),
+			t.Forward("10.10.4.2/32", "00:00:0a:00:00:0b", "00:00:0a:00:00:03", "2"),
+			t.Forward("10.10.5.2/32", "00:00:0a:00:00:0c", "00:00:0a:00:00:04", "3"),
+			t.Forward("10.10.0.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
+			t.Forward("10.10.1.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
+			t.Forward("10.10.2.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
+			t.Arp("10.10.4.1", "00:00:0a:00:00:0b"),
+			t.Arp("10.10.5.1", "00:00:0a:00:00:0c"),
 		},
 	}
+	
+	if addTelemetryEntries {
+		res["r1"] = append(res["r1"], []connector.RawTableEntry{
+			t.ActivateSource(2),
+			t.ConfigureSource(
+				"10.10.0.2&&&0xFFFFFFFF", "10.10.4.2&&&0xFFFFFFFF", 0x11FF, 0x22FF, 4, 10, 8, 0xFF00,
+			),
+			t.Transit(1, 1500),
+		}...)
+		res["r2"] = append(res["r2"], []connector.RawTableEntry{
+			t.Transit(2, 1500),
+		}...)
+
+		res["r3"] = append(res["r3"], []connector.RawTableEntry{
+			t.ConfigureSink(2, 1),
+			t.Reporting("00:00:0a:00:00:0a", "10.10.3.2", "00:00:0a:00:00:08", "10.10.2.2", 6000),
+			t.Transit(3, 1500),
+		}...)
+	}
+
+	return res
 }
 
 func V3_telemetry_artifact_paths() (binPath string, p4infoPath string) {

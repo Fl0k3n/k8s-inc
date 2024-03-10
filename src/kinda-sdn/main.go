@@ -9,6 +9,7 @@ import (
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/controller"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	"github.com/Fl0k3n/k8s-inc/kinda-sdn/telemetry"
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
 	"google.golang.org/grpc"
 )
@@ -25,6 +26,7 @@ func runServer(frontend *controller.KindaSdn, grpcAddr string) error {
 
 func updateNames(topo *model.Topology) {
 	// kubectl get nodes -l sname=w1 --no-headers 
+	nodeNamesRemap := map[model.DeviceName]model.DeviceName{}
 	for i := 0; i < len(topo.Devices); i++ {
 		dev := topo.Devices[i]
 		if dev.GetType() == model.NODE {
@@ -34,8 +36,17 @@ func updateNames(topo *model.Topology) {
 			if err != nil {
 				panic(err)
 			}
+			oldName := n.Name
 			n.Name = model.DeviceName(strings.Split(string(out), " ")[0])
+			nodeNamesRemap[oldName] = n.Name
 			topo.Devices[i] = n
+		}
+	}
+	for _, dev := range topo.Devices {
+		for _, link := range dev.GetLinks() {
+			if newName, ok := nodeNamesRemap[link.To]; ok {
+				link.To = newName
+			}
 		}
 	}
 }
@@ -43,8 +54,9 @@ func updateNames(topo *model.Topology) {
 func main() {
 	topo := generated.V3_grpc_topo()
 	updateNames(topo)
-	p4Config := generated.V3_grpc_p4_conf_raw()
-	kindaSdn := controller.NewKindaSdn(topo, p4Config)
+	p4Config := generated.V3_grpc_p4_conf_raw(false)
+	telemetryService := telemetry.NewTelemetryService()
+	kindaSdn := controller.NewKindaSdn(topo, p4Config, telemetryService)
 	if err := kindaSdn.InitTopology(); err != nil {
 		fmt.Println("Failed to init topology")
 		fmt.Println(err)

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/Fl0k3n/k8s-inc/kinda-sdn/device"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
+	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -39,4 +41,10 @@ func (m *KindaSdn) GetSwitchDetails(ctx context.Context, names *pb.SwitchNames) 
 	return &pb.SwitchDetailsResponse{
 		Details: res,
 	}, nil
+}
+
+func (m *KindaSdn) EnableTelemetry(ctx context.Context, req *pbt.EnableTelemetryRequest) (*pbt.EnableTelemetryResponse, error) {
+	return m.telemetryService.EnableTelemetry(req, m.topo, func(dn model.DeviceName) device.IncSwitch {
+		return m.bmv2Managers[dn]
+	})	
 }

@@ -1,7 +1,9 @@
 package model
 
-type DeviceType string
-type DeviceName string
+import "fmt"
+
+type DeviceType = string
+type DeviceName = string
 
 const (
 	NODE DeviceType = "node"
@@ -29,6 +31,9 @@ type Device interface {
 	GetName() DeviceName
 	GetLinks() []*Link
 	GetType() DeviceType
+	GetPortNumberTo(DeviceName) (p int, ok bool)
+	MustGetPortNumberTo(DeviceName) int
+	MustGetLinkTo(DeviceName) *Link
 }
 
 func NewLink(to DeviceName, mac string, ipv4 string, mask int) *Link {
@@ -51,6 +56,27 @@ func (b *BaseDevice) GetName() DeviceName {
 
 func (b *BaseDevice) GetLinks() []*Link {
 	return b.Links
+}
+
+func (b *BaseDevice) GetPortNumberTo(name DeviceName) (int, bool) {
+	for i, link := range b.GetLinks() {
+		if link.To == name {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+func (b *BaseDevice) MustGetPortNumberTo(name DeviceName) int {
+	res, ok := b.GetPortNumberTo(name)
+	if !ok {
+		panic(fmt.Sprintf("Device %s doesn't have a link to %s", b.GetName(), name))
+	}
+	return res
+}
+
+func (b *BaseDevice) MustGetLinkTo(name DeviceName) *Link {
+	return b.GetLinks()[b.MustGetPortNumberTo(name)]
 }
 
 type IncSwitch struct {
