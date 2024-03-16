@@ -117,16 +117,68 @@ spec:
                   - podReference
                   type: object
                 type: array
+              ingressInfo:
+                properties:
+                  nodeNames:
+                    description: these fields should be included in a dynamic subtype
+                      based on IngressType, but since we probably won't support anything
+                      except simple NodePort let's keep it this way
+                    items:
+                      type: string
+                    type: array
+                  serviceName:
+                    type: string
+                  serviceNamespace:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - nodeNames
+                - serviceName
+                - serviceNamespace
+                - type
+                type: object
+              monitoringPolicy:
+                type: string
               programName:
                 type: string
             required:
             - collectorNodeName
             - entries
+            - ingressInfo
+            - monitoringPolicy
             - programName
             type: object
           status:
             description: ExternalInNetworkTelemetryEndpointsStatus defines the observed
               state of ExternalInNetworkTelemetryEndpoints
+            properties:
+              ingressInfo:
+                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
+                  of cluster Important: Run "make" to regenerate code after modifying
+                  this file'
+                properties:
+                  nodeNames:
+                    description: these fields should be included in a dynamic subtype
+                      based on IngressType, but since we probably won't support anything
+                      except simple NodePort let's keep it this way
+                    items:
+                      type: string
+                    type: array
+                  serviceName:
+                    type: string
+                  serviceNamespace:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - nodeNames
+                - serviceName
+                - serviceNamespace
+                - type
+                type: object
+              monitoringPolicy:
+                type: string
             type: object
         type: object
     served: true

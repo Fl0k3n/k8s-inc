@@ -1,0 +1,33 @@
+apiVersion: inc.example.com/v1alpha1
+kind: InternalTelemetryDeployment
+metadata:
+  name: webAppIntedDeployment
+spec:
+  deploymentSpec: ...
+  requiredProgram: programName # when building compatibility graph controller will consider only devices with this program installed
+  collector:
+    selector:
+      label: myCollector
+    config: ...
+  requireAtLeastIntDevices: 50% # e.g. if we have 4 layers of switches in the tree we need at least 2 with enabled INT
+  toService: clusterIPServiceName 
+  fromService: clusterIPServiceName  
+
+for internal INT deployment we want to setup deployment in such a way that for all endpoints of a given service
+for each path from our pods there is at least 50% of INT devices
+
+so the scheduling would need to:
+- find nodes where these services are running
+- find out from which nodes we can have paths that comply with our INT requirements
+- set affinity
+- needed resources: services, nodes, topology, incswitches
+
+
+then we can use our src/target SDN API and:
+- find targets (using services)
+- get sources
+- send it to SDN
+
+
+THERE is most likely no way to run 2 deployments at once and to require compliance with INT requirements
+

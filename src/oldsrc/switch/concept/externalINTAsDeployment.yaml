@@ -12,6 +12,12 @@ spec:
   monitorFromInternetToPods: true
   monitorFromPodsToInternet: true
   requireAtLeastIntDevices: 50% # e.g. if we have 4 layers of switches in the tree we need at least 2 with enabled INT
+  ingressInfo:
+    type: node-port-on-single-node
+    nodeNames:
+      - w1
+      - w3
+    serviceName: someNodePortService
 
 
 user creates this, when such deployment is created:
@@ -43,3 +49,16 @@ switchB: ...
 then we could claim that we could have other controller that would monitor those metrics and migrate pods
 
 also remember about multi-path situations
+
+
+as for ingressInfo, to monitor traffic we need to know it's origin, the scenario that we should consider is that:
+- there are some devices of type External (let's assume just 1 for simplicity), they are gateways to the cluster
+- to access some internal service we must use ingress
+- the flow is: user sends request to the ingress, request flies through External, DIRECTLY to the node where ingress runs, this traffic is not tunnelled in GRE
+- there might be more than 1 node where ingress runs
+- ingress forwards request to proper backend, this traffic is tunneled as ingress pod send it to some backend pod
+- we want to monitor both cases:
+  - traffic from external to ingress <- this is problematic for http ingress (p4 can't look at urls to correlate ingress with backend), we can also consider node-port ~ingress, but assure that only certain node(s) are directed, this would have a similar effect and would be doable since we could correlate raports based on ports
+  - and from ingress to backend
+- monitoring of external -> ingress traffic should be best-effort, our eintDepl takes ingress info as input, scheduler cares only about ingress -> pods
+

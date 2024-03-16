@@ -19,12 +19,14 @@ const TELEMETRY_MTU = 1500
 type TelemetryService struct {
 	entityMapLock sync.Mutex
 	entityLocks map[string]*sync.Mutex
+	transitCounters sync.Map // key = deviceName, val = counter of transit requests
 }
 
 func NewTelemetryService() *TelemetryService {
 	return &TelemetryService{
 		entityMapLock: sync.Mutex{},
 		entityLocks: make(map[string]*sync.Mutex),
+		transitCounters: sync.Map{},
 	}
 }
 
@@ -34,14 +36,18 @@ func (t *TelemetryService) InitDevices(ctx context.Context, topo *model.Topology
 	// TODO don't do this like this
 
 	switchIds := getSwitchIds(topo)
-	for _, dev := range topo.Devices {
-		if dev.GetType() == model.INC_SWITCH && dev.(*model.IncSwitch).InstalledProgram == "telemetry" {
-			swId := switchIds[dev.GetName()]
-			dev := deviceProvider(dev.GetName())
-			if err := dev.WriteEntry(ctx, Transit(swId, TELEMETRY_MTU)); err != nil {
-				return err
-			}
-		}
+	// for _, dev := range topo.Devices {
+	// 	if dev.GetType() == model.INC_SWITCH && dev.(*model.IncSwitch).InstalledProgram == "telemetry" {
+	// 		swId := switchIds[dev.GetName()]
+	// 		dev := deviceProvider(dev.GetName())
+	// 		if err := dev.WriteEntry(ctx, Transit(swId, TELEMETRY_MTU)); err != nil {
+	// 			return err
+	// 		}
+	// 	}
+	// }
+
+	for switchName := range switchIds {
+		t.transitCounters.Store(switchName, 0)
 	}
 
 	return nil
@@ -75,13 +81,35 @@ func (t *TelemetryService) EnableTelemetry(
 		t.entityLocks[req.CollectionId].Unlock()
 	}()
 
+	// TODO store state and remove not needed entries 
+
 	G := model.TopologyToGraph(topo)
 	desiredEntities := t.findTelemetryEntitiesForRequest(req, G)
-	// transits are already handled so ignore them, otherwise keep transit counters and if
-	// counter transitions from 0 to n then configure transit and if it drops from 1 to 0 delete it
 
+	if len(desiredEntities.Transits) > 0 {
+		switchIds := getSwitchIds(topo)
+		for transit := range desiredEntities.Transits {
+			for {
+				counter, ok := t.transitCounters.Load(transit)
+				if !ok {
+					panic("Unitialized counter")
+				}
+				if ok := t.transitCounters.CompareAndSwap(transit, counter, counter.(int) + 1); ok {
+					if counter.(int) == 0 {
+						ctx, cancel := context.WithTimeout(context.Background(), time.Second * 2)
+						if err := deviceProvider(transit).WriteEntry(ctx, Transit(switchIds[transit], TELEMETRY_MTU)); err != nil {
+							cancel()
+							return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
+						}
+						cancel()
+					}
+					break
+				}
+			}
+		}
+	}
 
-	// TODO conflicting sinks
+	// TODO conflicting sinks (?)
 	for sink := range desiredEntities.Sinks {
 		deviceMeta := G[sink.from].(*model.IncSwitch)
 		device := deviceProvider(sink.from)
@@ -108,7 +136,7 @@ func (t *TelemetryService) EnableTelemetry(
 		}
 	}
 
-	for source, ipPairs := range desiredEntities.Sources {
+	for source, configEntries := range desiredEntities.Sources {
 		deviceMeta := G[source.from].(*model.IncSwitch)
 		device := deviceProvider(source.from)
 		portToActivate, ok := deviceMeta.GetPortNumberTo(source.to)
@@ -118,10 +146,10 @@ func (t *TelemetryService) EnableTelemetry(
 		if err := t.writeEntryIgnoringDuplicateError(device, ActivateSource(portToActivate + 1)); err != nil {
 			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
 		}
-		// TODO ports
-		for _, ipPair := range ipPairs {
+		for _, config := range configEntries {
 			if err := t.writeEntryIgnoringDuplicateError(device, ConfigureSource(
-				ipPair.src, ipPair.dst, 4607, 8959, 4, 10, 8, 0xFF00,
+				config.ips.src, config.ips.dst, config.srcPort, config.dstPort,
+				4, 10, 8, FULL_TELEMETRY_KEY, config.tunneled,
 			)); err != nil {
 				return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, err
 			}
@@ -179,69 +207,152 @@ func (t *TelemetryService) isCompatible(dev model.Device, programName string) bo
 	return dev.GetType() == model.INC_SWITCH && dev.(*model.IncSwitch).InstalledProgram == programName
 }
 
+func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
+	G model.TopologyGraph,
+	sourceDevice string,
+	targetDevice string,
+	programName string,
+	entities *TelemetryEntities,
+) (reversedPath []string, sourcePathIdx int, sinkPathIdx int, foundIncDeviceOnPath bool) {
+	foundIncDeviceOnPath = false
+	if sourceDevice == targetDevice {
+		return
+	}
+	visited := map[string]bool{}
+	reversedPath = []string{}
+	dfs(G, targetDevice, sourceDevice, &reversedPath, visited)
+	if len(reversedPath) == 0 {
+		panic("no path")
+	}
+	i := len(reversedPath) - 2
+	for ; i >= 0; i-- {
+		if t.isCompatible(G[reversedPath[i]], programName) {
+			break
+		}
+	}
+	if i < 0 {
+		return
+	}
+	j := 1
+	for ; j <= i; j++ {
+		if t.isCompatible(G[reversedPath[j]], programName) {
+			break
+		}
+	}
+	for k := j + 1; k < i; k++ {
+		dev := G[reversedPath[k]]
+		if t.isCompatible(dev, programName) {
+			entities.Transits[dev.GetName()] = struct{}{}
+		}
+	}
+	foundIncDeviceOnPath = true
+	sourcePathIdx = i
+	sinkPathIdx = j
+	return
+}
+
+func (t *TelemetryService) createTunneledTelemetryConfigs(
+	sourceDetails *pbt.TunneledEntities,
+	targetDetails *pbt.TunneledEntities,
+) []TelemetrySourceConfig {
+	res := []TelemetrySourceConfig{}
+	for _, s := range sourceDetails.Entities {
+		for _, t := range targetDetails.Entities {
+			srcPort := ANY_PORT
+			if s.Port != nil {
+				srcPort = int(*s.Port)
+			}
+			dstPort := ANY_PORT
+			if t.Port != nil {
+				dstPort = int(*t.Port)
+			}
+			res = append(res, TelemetrySourceConfig{
+				ips: TernaryIpPair{
+					src: ExactIpv4Ternary(s.TunneledIp),
+					dst: ExactIpv4Ternary(t.TunneledIp),
+				},
+				srcPort: srcPort,
+				dstPort: dstPort,
+				tunneled: true,
+			})
+		}
+	}
+	return res
+}
+
+func (t *TelemetryService) createRawTelemetryConfig(
+	G model.TopologyGraph,
+	sourceDetails *pbt.RawTelemetryEntity,
+	targetDetails *pbt.RawTelemetryEntity,
+	reversedPath []string,
+) TelemetrySourceConfig {
+	ipPair := TernaryIpPair{}
+	source := sourceDetails.DeviceName
+	target := targetDetails.DeviceName
+	if G[source].GetType() == model.EXTERNAL {
+		ipPair.src = ANY_IPv4
+	} else {
+		ipPair.src = ExactIpv4Ternary(G[source].MustGetLinkTo(reversedPath[len(reversedPath) - 2]).Ipv4)
+	}
+	if G[target].GetType() == model.EXTERNAL {
+		ipPair.dst = ANY_IPv4
+	} else {
+		ipPair.dst = ExactIpv4Ternary(G[target].MustGetLinkTo(reversedPath[1]).Ipv4)
+	}
+	srcPort := ANY_PORT
+	if sourceDetails.Port != nil {
+		srcPort = int(*sourceDetails.Port)
+	}
+	dstPort := ANY_PORT
+	if targetDetails.Port != nil {
+		dstPort = int(*targetDetails.Port)
+	}
+	return TelemetrySourceConfig{
+		ips: ipPair,
+		srcPort: srcPort,
+		dstPort: dstPort,
+		tunneled: false,
+	}
+}
+
 func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.EnableTelemetryRequest, G model.TopologyGraph) TelemetryEntities {
 	res := TelemetryEntities{
-		Sources: map[Edge][]TernaryIpPair{},
+		Sources: map[Edge][]TelemetrySourceConfig{},
 		Transits: map[string]struct{}{},
 		Sinks: map[Edge]struct{}{},
 	}
 
-	// TODO handle tunneled
-	sources := req.Sources.(*pbt.EnableTelemetryRequest_RawSources).RawSources
-	targets := req.Targets.(*pbt.EnableTelemetryRequest_RawTargets).RawTargets
 
-	for _, source := range sources.DeviceNames {
-		for _, target := range targets.DeviceNames {
+	for sourceIdx, source := range getSourceDeviceNames(req) {
+		for targetIdx, target := range getTargetDeviceNames(req) {
 			if source == target {
 				continue
 			}
-			visited := map[string]bool{}
-			reversedPath := []string{}
-			dfs(G, target, source, &reversedPath, visited)
-			if len(reversedPath) == 0 {
-				panic("no path")
-			}
-			i := len(reversedPath) - 2
-			for ; i >= 0; i-- {
-				if t.isCompatible(G[reversedPath[i]], req.ProgramName) {
-					break
-				}
-			}
-			if i < 0 {
+			reversedPath, sourcePathIdx, sinkPathIdx, foundIncDeviceOnPath := t.findSourceSinkEdgesAndFillTransit(
+				G, source, target, req.ProgramName, &res) 	
+			if !foundIncDeviceOnPath {
 				continue
 			}
-			sourceDev := reversedPath[i]
-			j := 1
-			for ; j <= i; j++ {
-				if t.isCompatible(G[reversedPath[j]], req.ProgramName) {
-					break
-				}
+
+			sinkEdge := Edge{from: reversedPath[sinkPathIdx], to: reversedPath[sinkPathIdx-1]}
+			sourceEdge := Edge{from: reversedPath[sourcePathIdx], to: reversedPath[sourcePathIdx+1]}
+			res.Sinks[sinkEdge] = struct{}{}
+
+			sd := getSourceDetails(req, source, sourceIdx)
+			td := getTargetDetails(req, target, targetIdx)
+			sourceConf, ok := res.Sources[sourceEdge]
+			if !ok {
+				sourceConf = []TelemetrySourceConfig{}
 			}
-			sinkDev := reversedPath[j]
-			for k := j + 1; k < i; k++ {
-				dev := G[reversedPath[k]]
-				if t.isCompatible(dev, req.ProgramName) {
-					res.Transits[dev.GetName()] = struct{}{}
-				}
-			}
-			res.Sinks[Edge{from: sinkDev, to: reversedPath[j-1]}] = struct{}{}
-			sourceEdge := Edge{from: sourceDev, to: reversedPath[i+1]}
-			ipPair := TernaryIpPair{}
-			if G[source].GetType() == model.EXTERNAL {
-				ipPair.src = AnyIpv4Ternary()
+
+			if requiresTunneling(req) {
+				newEntries := t.createTunneledTelemetryConfigs(sd.(*pbt.TunneledEntities), td.(*pbt.TunneledEntities))
+				sourceConf = append(sourceConf, newEntries...)
 			} else {
-				ipPair.src = ExactIpv4Ternary(G[source].MustGetLinkTo(reversedPath[len(reversedPath) - 2]).Ipv4)
+				newEntry := t.createRawTelemetryConfig(G, sd.(*pbt.RawTelemetryEntity), td.(*pbt.RawTelemetryEntity), reversedPath)	
+				sourceConf = append(sourceConf, newEntry)
 			}
-			if G[target].GetType() == model.EXTERNAL {
-				ipPair.dst = AnyIpv4Ternary()
-			} else {
-				ipPair.dst = ExactIpv4Ternary(G[target].MustGetLinkTo(reversedPath[1]).Ipv4)
-			}
-			if ips, ok := res.Sources[sourceEdge]; ok {
-				res.Sources[sourceEdge] = append(ips, ipPair)
-			} else {
-				res.Sources[sourceEdge] = []TernaryIpPair{ipPair}
-			}
+			res.Sources[sourceEdge] = sourceConf
 		}
 	}
 

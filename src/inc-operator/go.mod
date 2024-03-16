@@ -13,6 +13,8 @@ require (
 )
 
 require (
+	github.com/gammazero/deque v0.2.1 // indirect
+	github.com/hashicorp/go-set v0.1.14 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20240123012728-ef4313101c80 // indirect
 	google.golang.org/grpc v1.62.1 // indirect
 )

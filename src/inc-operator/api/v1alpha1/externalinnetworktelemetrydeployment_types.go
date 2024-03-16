@@ -32,6 +32,30 @@ const (
 	READY       PodTelemetryStatus = "ready"
 )
 
+type IngressType string
+
+const (
+	NODE_PORT IngressType = "nodePort"
+)
+
+type MonitoringPolicy string
+
+const (
+	MONITOR_EXTERNAL_TO_PODS MonitoringPolicy = "external-to-pods"
+	MONITOR_PODS_TO_EXTERNAL MonitoringPolicy = "pods-to-external"
+	MONITOR_ALL				 MonitoringPolicy = "all"
+)
+
+type IngressInfo struct {
+	IngressType IngressType `json:"type"`
+
+	// these fields should be included in a dynamic subtype based on IngressType,
+	// but since we probably won't support anything except simple NodePort let's keep it this way
+	NodeNames []string `json:"nodeNames"` 
+	NodePortServiceName string `json:"serviceName"`
+	NodePortServiceNamespace string `json:"serviceNamespace"`
+}
+
 // ExternalInNetworkTelemetryDeploymentSpec defines the desired state of ExternalInNetworkTelemetryDeployment
 type ExternalInNetworkTelemetryDeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
@@ -39,6 +63,9 @@ type ExternalInNetworkTelemetryDeploymentSpec struct {
 
 	DeploymentTemplate appsv1.DeploymentSpec `json:"deploymentTemplate"`
 	RequiredProgram string `json:"requiredProgram"`
+	IngressInfo IngressInfo `json:"ingressInfo"`
+	MonitoringPolicy MonitoringPolicy `json:"monitoringPolicy"`
+	RequireAtLeastIntDevices *string `json:"requireAtLeastIntDevices,omitempty"`
 }
 
 // ExternalInNetworkTelemetryDeploymentStatus defines the observed state of ExternalInNetworkTelemetryDeployment

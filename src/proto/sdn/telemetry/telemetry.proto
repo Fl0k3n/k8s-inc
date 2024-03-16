@@ -24,15 +24,25 @@ message EnableTelemetryRequest {
 }
 
 message TunneledTelemetryEntities {
-    map<string, TunneledEntity> deviceNamesWithEntities = 1;
+    map<string, TunneledEntities> deviceNamesWithEntities = 1;
+}
+
+message TunneledEntities {
+    repeated TunneledEntity entities = 1;
 }
 
 message TunneledEntity {
-    string ipv4 = 1;
+    string tunneledIp = 1;
+    optional int32 port = 2; // not present means any port
 }
 
 message RawTelemetryEntities {
-    repeated string deviceNames = 1;
+    repeated RawTelemetryEntity entities = 1;
+}
+
+message RawTelemetryEntity {
+    string deviceName = 1;
+    optional int32 port = 2; // not present means any port
 }
 
 enum TelemetryState {

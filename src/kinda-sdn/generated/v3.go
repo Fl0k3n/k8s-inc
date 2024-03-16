@@ -107,23 +107,23 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Arp("10.10.5.1", "00:00:0a:00:00:0c"),
 		},
 	}
-	
+
 	if addTelemetryEntries {
 		res["r1"] = append(res["r1"], []connector.RawTableEntry{
 			t.ActivateSource(2),
 			t.ConfigureSource(
-				"10.10.0.2&&&0xFFFFFFFF", "10.10.4.2&&&0xFFFFFFFF", 0x11FF, 0x22FF, 4, 10, 8, 0xFF00,
+				"10.10.0.2&&&0xFFFFFFFF", "10.10.4.2&&&0xFFFFFFFF", 0x11FF, 0x22FF, 4, 10, 8, 0xFF00, false,
 			),
-			t.Transit(1, 1500),
+			// t.Transit(1, 1500),
 		}...)
 		res["r2"] = append(res["r2"], []connector.RawTableEntry{
-			t.Transit(2, 1500),
+			// t.Transit(2, 1500),
 		}...)
 
 		res["r3"] = append(res["r3"], []connector.RawTableEntry{
 			t.ConfigureSink(2, 1),
 			t.Reporting("00:00:0a:00:00:0a", "10.10.3.2", "00:00:0a:00:00:08", "10.10.2.2", 6000),
-			t.Transit(3, 1500),
+			// t.Transit(3, 1500),
 		}...)
 	}
 
@@ -131,7 +131,7 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 }
 
 func V3_telemetry_artifact_paths() (binPath string, p4infoPath string) {
-	binPath = "/home/flok3n/develop/virtual/telemetry2/int-platforms/p4src/int_v4.0/int4.json"
-	p4infoPath = "/home/flok3n/develop/virtual/telemetry2/int-platforms/p4src/int_v4.0/int4.txt"
+	binPath = "/home/flok3n/develop/virtual/telemetry2/int-platforms/p4src/int_v5.0/int.json"
+	p4infoPath = "/home/flok3n/develop/virtual/telemetry2/int-platforms/p4src/int_v5.0/int.txt"
 	return
 }

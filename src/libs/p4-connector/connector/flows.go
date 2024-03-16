@@ -167,12 +167,6 @@ func (p *P4RuntimeConnector) BuildMatchEntry(tableName string, rawMatchEntries m
 	}
 	res := make(MatchEntry)
 	mfs := getMatchMap(table)
-	if len(mfs) != len(rawMatchEntries) {
-		return res, newInvalidArgumentError(fmt.Sprintf(
-			"table: %s\tInvalid number of match keys, expected %d, got %d",
-			tableName, len(mfs), len(rawMatchEntries)),
-		)
-	}
 
 	for key, matchValue := range rawMatchEntries {
 		if mf, ok := mfs[key]; ok {

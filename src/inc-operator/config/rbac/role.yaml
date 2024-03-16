@@ -192,6 +192,20 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - services
+  verbs:
+  - get
+  - list
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - services/status
+  verbs:
+  - get
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - topologies
   verbs:
   - create

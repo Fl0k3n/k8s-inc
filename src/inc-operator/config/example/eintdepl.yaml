@@ -4,6 +4,12 @@ metadata:
   name: eintdepl
 spec:
   requiredProgram: telemetry
+  ingressInfo:
+    type: node-port
+    nodeNames:
+      - w3
+  monitoringPolicy: all
+  requireAtLeastIntDevices: "50%"
   deploymentTemplate:
     replicas: 1
     selector:

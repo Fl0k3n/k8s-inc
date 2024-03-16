@@ -18,8 +18,13 @@ package controllers
 
 import (
 	"context"
+	"fmt"
+	"strconv"
+	"strings"
 
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
+	deques "github.com/gammazero/deque"
+	sets "github.com/hashicorp/go-set"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -72,11 +77,104 @@ type ExternalInNetworkTelemetryDeploymentReconciler struct {
 
 const POD_EINT_DEPL_OWNER_LABEL = "inc.kntp.com/deployed-by"
 
+func countIncSwitchesOnPathWithRequiredProgram(
+	path []string,
+	incSwitches map[string]*shimv1alpha1.IncSwitch,
+	programName string,
+) int {
+	res := 0
+	for _, node := range path {
+		if inc, isInc := incSwitches[node]; isInc {
+			if inc.Spec.ProgramName == programName {
+				res++
+			}
+		}
+	}
+	return res
+}
+
+func pathCompliesWithRequirement(
+	ctx context.Context,
+	incSwitches map[string]*shimv1alpha1.IncSwitch,
+	path []string,
+	eintDepl incv1alpha1.ExternalInNetworkTelemetryDeploymentSpec,
+) bool {
+	if eintDepl.RequireAtLeastIntDevices == nil {
+		return true
+	}
+	log := log.FromContext(ctx)
+	requiredIntDevices := *eintDepl.RequireAtLeastIntDevices
+
+	var err error
+	if strings.HasSuffix("%", requiredIntDevices) {
+		var percentage int64
+		percentage, err = strconv.ParseInt(requiredIntDevices[:len(requiredIntDevices) - 1], 0, 32)
+		if err != nil {
+			goto fail
+		}
+		if percentage == 0 || len(path) == 0 {
+			return true
+		}
+		compliantSwitches := countIncSwitchesOnPathWithRequiredProgram(path, incSwitches, eintDepl.RequiredProgram)
+		const CLOSE_ENOUGH_COEFF = 0.01
+		return (float32(compliantSwitches) / float32(len(path))) >= (float32(percentage) / 100 - CLOSE_ENOUGH_COEFF)
+	} else {
+		var rawNum int64
+		rawNum, err = strconv.ParseInt(requiredIntDevices, 0, 32)
+		if err != nil {
+			goto fail
+		}
+		if len(path) < int(rawNum) {
+			return false
+		}
+		if rawNum == 0 {
+			return true
+		}
+		return countIncSwitchesOnPathWithRequiredProgram(path, incSwitches, eintDepl.RequiredProgram) >= int(rawNum)
+	}
+fail:
+	log.Error(err, "Invalid requiredIntDevices string")
+	return true
+}
+
+// BFS traversal
+func traverseTopology(
+	startNode string,
+	topoGraph map[string]shimv1alpha1.NetworkDevice,
+	consumer func (endpoint string, path []string) (stop bool),
+) {
+	q := deques.New[string]()
+	paths := map[string][]string{}
+	visited := sets.New[string](len(topoGraph))
+
+	q.PushBack(startNode)
+	paths[startNode] = []string{}
+	visited.Insert(startNode)
+
+	for q.Len() > 0 {
+		cur := q.PopFront()
+		path := paths[cur]
+		if stop := consumer(cur, path); stop {
+			break
+		}
+		nextPath := append(path, cur)
+
+		v := topoGraph[cur]
+		for _, neigh := range v.Links {
+			if !visited.Contains(neigh.PeerName) {
+				paths[neigh.PeerName] = nextPath
+				visited.Insert(neigh.PeerName)
+				q.PushBack(neigh.PeerName)
+			}
+		}	
+	}
+}
+
 func (r *ExternalInNetworkTelemetryDeploymentReconciler) pickFeasibleNodes(
 		ctx context.Context,
 		topo *shimv1alpha1.Topology,
 		req ctrl.Request,
-		programName string) ([]string, error) {
+		eintDepl incv1alpha1.ExternalInNetworkTelemetryDeploymentSpec) ([]string, error) {
 	log := log.FromContext(ctx)
 	_ = topo
 	_ = req
@@ -86,21 +184,27 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) pickFeasibleNodes(
 		return nil, err
 	}
 
-	// TODO proper selection logic
-	hasOneWithProgram := false
-	for _, incSwitch := range incSwitches {
-		// if incSwitch.Status.InstalledProgram == programName { TODO
-		if incSwitch.Spec.ProgramName == programName {
-			hasOneWithProgram = true
-			break
-		}
-	}
-	if !hasOneWithProgram {
-		return []string{}, nil
+	if eintDepl.IngressInfo.IngressType != incv1alpha1.NODE_PORT {
+		return nil, fmt.Errorf("unsupported ingress type %s", eintDepl.IngressInfo.IngressType)
 	}
 
-	// return sname labels
-	return []string{"w3"}, nil
+	ingressNodes := eintDepl.IngressInfo.NodeNames
+	G := shimutils.TopologyToGraph(topo)
+	feasibleNodes := sets.New[string](0)
+
+	for _, ingressNode := range ingressNodes {
+		traverseTopology(ingressNode, G, func(endpoint string, path []string) (stop bool) {
+			node := G[endpoint]
+			if node.DeviceType == shimv1alpha1.NODE {
+				if pathCompliesWithRequirement(ctx, incSwitches, path, eintDepl) {
+					feasibleNodes.Insert(endpoint)
+				}
+			}
+			return false
+		})
+	}
+	
+	return feasibleNodes.Slice(), nil
 }
 
 func (r *ExternalInNetworkTelemetryDeploymentReconciler) reconcileEndpoints(
@@ -203,12 +307,12 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 	if err := r.Get(ctx, types.NamespacedName{Namespace: req.Namespace, Name: eintDepl.Name}, deploy); err != nil {
 		if apierrors.IsNotFound(err) {
 
-			feasibleNodesSnames, err := r.pickFeasibleNodes(ctx, topo, req, eintDepl.Spec.RequiredProgram)
+			feasibleNodeNames, err := r.pickFeasibleNodes(ctx, topo, req, eintDepl.Spec)
 			if err != nil {
 				return ctrl.Result{}, err
 			}
 
-			if len(feasibleNodesSnames) == 0 {
+			if len(feasibleNodeNames) == 0 {
 				log.Info("No feasible nodes")
 				return ctrl.Result{}, nil
 			}
@@ -222,9 +326,9 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 							{
 								MatchExpressions: []v1.NodeSelectorRequirement{
 									{
-										Key: "sname",
+										Key: "clustername",
 										Operator: "In",
-										Values:	feasibleNodesSnames,
+										Values:	feasibleNodeNames,
 									},
 								},
 							},
@@ -278,6 +382,7 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 					Entries: []incv1alpha1.ExternalInNetworkTelemetryEndpointsEntry{},
 					CollectorNodeName: collectorNodeName,
 					ProgramName: eintDepl.Spec.RequiredProgram,
+					IngressInfo: eintDepl.Spec.IngressInfo,
 				},
 			}
 			if err := controllerutil.SetControllerReference(eintDepl, eps, r.Scheme); err != nil {

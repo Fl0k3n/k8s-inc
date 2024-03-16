@@ -7948,10 +7948,37 @@ spec:
                 - selector
                 - template
                 type: object
+              ingressInfo:
+                properties:
+                  nodeNames:
+                    description: these fields should be included in a dynamic subtype
+                      based on IngressType, but since we probably won't support anything
+                      except simple NodePort let's keep it this way
+                    items:
+                      type: string
+                    type: array
+                  serviceName:
+                    type: string
+                  serviceNamespace:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - nodeNames
+                - serviceName
+                - serviceNamespace
+                - type
+                type: object
+              monitoringPolicy:
+                type: string
+              requireAtLeastIntDevices:
+                type: string
               requiredProgram:
                 type: string
             required:
             - deploymentTemplate
+            - ingressInfo
+            - monitoringPolicy
             - requiredProgram
             type: object
           status:

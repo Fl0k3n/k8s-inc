@@ -73,3 +73,21 @@ func GetNameOfNodeWithSname(ctx context.Context, client client.Client, sname str
 	}
 	return "", fmt.Errorf("no node with sname %s", sname)
 }
+
+func GetExternalDevices(topo TopologyGraph) []shimv1alpha1.NetworkDevice{
+	res := []shimv1alpha1.NetworkDevice{}
+	for _, dev := range topo {
+		if dev.DeviceType == shimv1alpha1.EXTERNAL {
+			res = append(res, dev)
+		}
+	}
+	return res
+}
+
+func GetDeviceNames(devices []shimv1alpha1.NetworkDevice) []string {
+	res := make([]string, 0, len(devices))
+	for _, dev := range devices {
+		res = append(res, dev.Name)
+	}
+	return res
+}
