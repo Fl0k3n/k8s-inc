@@ -153,7 +153,7 @@ spec:
             description: ExternalInNetworkTelemetryEndpointsStatus defines the observed
               state of ExternalInNetworkTelemetryEndpoints
             properties:
-              ingressInfo:
+              externalIngressInfo:
                 description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
                   of cluster Important: Run "make" to regenerate code after modifying
                   this file'
@@ -177,7 +177,30 @@ spec:
                 - serviceNamespace
                 - type
                 type: object
-              monitoringPolicy:
+              externalMonitoringPolicy:
+                type: string
+              internalIngressInfo:
+                properties:
+                  nodeNames:
+                    description: these fields should be included in a dynamic subtype
+                      based on IngressType, but since we probably won't support anything
+                      except simple NodePort let's keep it this way
+                    items:
+                      type: string
+                    type: array
+                  serviceName:
+                    type: string
+                  serviceNamespace:
+                    type: string
+                  type:
+                    type: string
+                required:
+                - nodeNames
+                - serviceName
+                - serviceNamespace
+                - type
+                type: object
+              internalMonitoringPolicy:
                 type: string
             type: object
         type: object

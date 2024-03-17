@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -157,7 +158,7 @@ func traverseTopology(
 		if stop := consumer(cur, path); stop {
 			break
 		}
-		nextPath := append(path, cur)
+		nextPath := append(slices.Clone(path), cur)
 
 		v := topoGraph[cur]
 		for _, neigh := range v.Links {
@@ -383,6 +384,7 @@ func (r *ExternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 					CollectorNodeName: collectorNodeName,
 					ProgramName: eintDepl.Spec.RequiredProgram,
 					IngressInfo: eintDepl.Spec.IngressInfo,
+					MonitoringPolicy: eintDepl.Spec.MonitoringPolicy,
 				},
 			}
 			if err := controllerutil.SetControllerReference(eintDepl, eps, r.Scheme); err != nil {

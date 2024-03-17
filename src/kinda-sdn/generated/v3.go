@@ -7,6 +7,14 @@ import (
 )
 
 func V3_grpc_topo() *model.Topology {
+	internet := &model.ExternalDevice{
+		BaseDevice: model.BaseDevice{
+			Name: "internet",
+			Links: []*model.Link{
+				model.NewLink("r3", "", "", -1),
+			},
+		},
+	}
 	r1 := model.NewBmv2IncSwitch(
 		"r1", 
 		[]*model.Link{
@@ -32,6 +40,7 @@ func V3_grpc_topo() *model.Topology {
 			model.NewLink("r2", "00:00:0a:00:00:0a", "10.10.3.2", 24),
 			model.NewLink("w3", "00:00:0a:00:00:0b", "10.10.4.1", 24),
 			model.NewLink("c1", "00:00:0a:00:00:0c", "10.10.5.1", 24),
+			model.NewLink("internet", "00:00:0a:00:00:0d", "10.10.6.1", 24),
 		},
 		"127.0.0.1:9562",
 	)
@@ -74,7 +83,7 @@ func V3_grpc_topo() *model.Topology {
 
 	return &model.Topology{
 		Devices:[]model.Device{
-			r1, r2, r3, w1, w2, w3, c1,
+			r1, r2, r3, w1, w2, w3, c1, internet,
 		},
 	}
 }
@@ -87,6 +96,8 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.3.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Forward("10.10.4.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Forward("10.10.5.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Forward("10.10.6.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			// t.DefaultRoute("00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Arp("10.10.0.1", "00:00:0a:00:00:06"),
 		},
 		"r2": {
@@ -95,6 +106,8 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.3.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Forward("10.10.4.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Forward("10.10.5.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			t.Forward("10.10.6.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			// t.DefaultRoute("00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Arp("10.10.2.1", "00:00:0a:00:00:09"),
 		},
 		"r3": {
@@ -103,8 +116,11 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.0.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
 			t.Forward("10.10.1.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
 			t.Forward("10.10.2.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
+			t.Forward("10.10.6.0/24", "00:00:0a:00:0f:02", "00:00:0a:00:0f:01", "4"),
+			// t.DefaultRoute("00:00:0a:00:0f:02", "00:00:0a:00:0f:01", "4"),
 			t.Arp("10.10.4.1", "00:00:0a:00:00:0b"),
 			t.Arp("10.10.5.1", "00:00:0a:00:00:0c"),
+			t.Arp("10.10.6.1", "00:00:0a:00:0f:02"),
 		},
 	}
 

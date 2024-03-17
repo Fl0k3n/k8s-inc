@@ -25,6 +25,19 @@ func Forward(ip string, srcMac string, dstMac string, port string) connector.Raw
 	}
 }
 
+func DefaultRoute(srcMac string, dstMac string, port string) connector.RawTableEntry {
+	return connector.RawTableEntry{
+		TableName: "ingress.Forward.ipv4_lpm",
+		Match: map[string]string{},
+		ActionName: "ingress.Forward.ipv4_forward",
+		ActionParams: map[string]string{
+			"srcAddr": srcMac,
+			"dstAddr": dstMac,
+			"port": port,
+		},
+	}
+}
+
 func Arp(ip string, mac string) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "ingress.Forward.arp_exact",

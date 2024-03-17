@@ -160,11 +160,12 @@ func (t *TelemetryService) EnableTelemetry(
 }
 
 func (t *TelemetryService) writeEntryIgnoringDuplicateError(device device.IncSwitch, entry connector.RawTableEntry) error {
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 1)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second * 2)
 	defer cancel()
 	if err := device.WriteEntry(ctx, entry); err != nil {
 		if connector.IsEntryExistsError(err) {
 			fmt.Printf("Entry already exists, table = %s\n", entry.TableName)
+			return nil
 		}
 		fmt.Printf("Failed to write entry %s\n%e", entry, err)
 		return err
@@ -266,10 +267,18 @@ func (t *TelemetryService) createTunneledTelemetryConfigs(
 			if t.Port != nil {
 				dstPort = int(*t.Port)
 			}
+			srcIp := ANY_IPv4
+			if s.TunneledIp != ANY_IPv4 {
+				srcIp = ExactIpv4Ternary(s.TunneledIp)
+			}
+			dstIp := ANY_IPv4
+			if t.TunneledIp != ANY_IPv4 {
+				dstIp = ExactIpv4Ternary(t.TunneledIp)
+			}
 			res = append(res, TelemetrySourceConfig{
 				ips: TernaryIpPair{
-					src: ExactIpv4Ternary(s.TunneledIp),
-					dst: ExactIpv4Ternary(t.TunneledIp),
+					src: srcIp,
+					dst: dstIp,
 				},
 				srcPort: srcPort,
 				dstPort: dstPort,
@@ -354,6 +363,14 @@ func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.EnableTeleme
 			}
 			res.Sources[sourceEdge] = sourceConf
 		}
+	}
+
+	// to have proper switch_ids we need to ensure that source/sink are configured as transits too
+	for src := range res.Sources {
+		res.Transits[src.from] = struct{}{}
+	}
+	for sink := range res.Sinks {
+		res.Transits[sink.from] = struct{}{}
 	}
 
 	return res

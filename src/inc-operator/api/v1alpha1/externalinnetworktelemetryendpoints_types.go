@@ -54,8 +54,10 @@ type ExternalInNetworkTelemetryEndpointsSpec struct {
 type ExternalInNetworkTelemetryEndpointsStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	InitializedIngressInfo *IngressInfo `json:"ingressInfo,omitempty"`
-	MonitoringPolicy *MonitoringPolicy `json:"monitoringPolicy,omitempty"`
+	ExternalIngressInfo *IngressInfo `json:"externalIngressInfo,omitempty"`
+	ExternalMonitoringPolicy *MonitoringPolicy `json:"externalMonitoringPolicy,omitempty"`
+	InternalIngressInfo *IngressInfo `json:"internalIngressInfo,omitempty"`
+	InternalMonitoringPolicy *MonitoringPolicy `json:"internalMonitoringPolicy,omitempty"`
 }
 
 //+kubebuilder:object:root=true

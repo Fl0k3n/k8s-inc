@@ -35,7 +35,7 @@ const (
 type IngressType string
 
 const (
-	NODE_PORT IngressType = "nodePort"
+	NODE_PORT IngressType = "NodePort"
 )
 
 type MonitoringPolicy string

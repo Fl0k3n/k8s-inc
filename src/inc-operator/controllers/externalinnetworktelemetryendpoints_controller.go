@@ -26,13 +26,11 @@ import (
 	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
-	sets "github.com/hashicorp/go-set"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -43,6 +41,8 @@ type ExternalInNetworkTelemetryEndpointsReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
 }
+
+const ANY_IPv4 = "any"
 
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=externalinnetworktelemetryendpoints,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=externalinnetworktelemetryendpoints/status,verbs=get;update;patch
@@ -78,60 +78,6 @@ type ExternalInNetworkTelemetryEndpointsReconciler struct {
 // }
 
 
-func (r *ExternalInNetworkTelemetryEndpointsReconciler) buildEnableTelemetryRequestIfChangeDetected(
-	ctx context.Context,
-	endpoints *incv1alpha1.ExternalInNetworkTelemetryEndpoints,
-) (*pbt.EnableTelemetryRequest, bool) {
-	targetDevices := sets.New[string](0)
-	changed := false
-
-	for _, entry := range endpoints.Spec.Entries {
-		if entry.EntryStatus == incv1alpha1.EP_READY {
-			targetDevices.Insert(entry.NodeName)
-		} else if entry.EntryStatus == incv1alpha1.EP_TERMINATING {
-			changed = true
-		} else if entry.EntryStatus == incv1alpha1.EP_PENDING {
-			changed = true
-			targetDevices.Insert(entry.NodeName)
-		}
-	}
-	if !changed {
-		return nil, false
-	}
-
-	sourceNodeName, err := shimutils.GetNameOfNodeWithSname(ctx, r.Client, "w1")
-	if err != nil {
-		panic(err)
-	}
-
-	return &pbt.EnableTelemetryRequest{
-		ProgramName: endpoints.Spec.ProgramName,
-		CollectionId: endpoints.Name,
-		CollectorNodeName: endpoints.Spec.CollectorNodeName,
-		CollectorPort: 6000, // TODO
-		Sources: &pbt.EnableTelemetryRequest_RawSources{
-			RawSources: &pbt.RawTelemetryEntities{
-				DeviceNames: []string{sourceNodeName},
-			},
-		},
-		Targets: &pbt.EnableTelemetryRequest_RawTargets{
-			RawTargets: &pbt.RawTelemetryEntities{
-				DeviceNames: targetDevices.Slice(),
-			},
-		},
-	}, true
-}
-
-func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcilePodTelemetry(
-	ctx context.Context,
-	endpoints *incv1alpha1.ExternalInNetworkTelemetryEndpoints,
-	topo *shimv1alpha1.Topology,
-	shim *shimv1alpha1.SDNShim,
-) (continueReconciliation bool, res ctrl.Result, err error) {
-
-	return
-}
-
 func (r *ExternalInNetworkTelemetryEndpointsReconciler) withTelemetryClient(grpcAddr string, consumer func(pbt.TelemetryServiceClient) error) error {
 	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
@@ -140,6 +86,7 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) withTelemetryClient(grpc
 	defer conn.Close()
 	return consumer(pbt.NewTelemetryServiceClient(conn))
 }
+
 
 func (r *ExternalInNetworkTelemetryEndpointsReconciler) buildIngressEntities(
 	ctx context.Context,
@@ -178,6 +125,140 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) buildIngressEntities(
 	return res, nil
 }
 
+
+func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcilePodTelemetry(
+	ctx context.Context,
+	endpoints *incv1alpha1.ExternalInNetworkTelemetryEndpoints,
+	shim *shimv1alpha1.SDNShim,
+) (continueReconciliation bool, res ctrl.Result, err error) {
+	log := log.FromContext(ctx)
+	targetEntities := map[string]*pbt.TunneledEntities{}
+	changed := utils.MonitoringPolicyChanged(endpoints.Spec.MonitoringPolicy, endpoints.Status.InternalMonitoringPolicy) ||
+			   utils.IngressInfoChanged(endpoints.Spec.IngressInfo, endpoints.Status.InternalIngressInfo)
+
+	// TODO optimize, don't send n queries
+	for _, entry := range endpoints.Spec.Entries {
+		addToTargets := false
+		if entry.EntryStatus == incv1alpha1.EP_READY {
+			addToTargets = true
+		} else if entry.EntryStatus == incv1alpha1.EP_TERMINATING {
+			changed = true
+		} else if entry.EntryStatus == incv1alpha1.EP_PENDING {
+			changed = true
+			addToTargets = true
+		}
+		if addToTargets {
+			podDetails := &v1.Pod{}
+			key := client.ObjectKey{Name: entry.PodReference.Name, Namespace: entry.PodReference.Namespace}
+			if err := r.Get(ctx, key, podDetails); err != nil {
+				log.Error(err, "Failed to fetch pod details")
+				return false, ctrl.Result{}, err
+			}
+			entity := &pbt.TunneledEntity{
+				TunneledIp: podDetails.Status.PodIP,
+				Port: nil, // any port
+			}
+			if oldEntities, ok := targetEntities[entry.NodeName]; ok {
+				oldEntities.Entities = append(oldEntities.Entities, entity)
+			} else {
+				targetEntities[entry.NodeName] = &pbt.TunneledEntities{Entities: []*pbt.TunneledEntity{entity}}
+			}
+		}
+	}
+	if !changed {
+		return true, ctrl.Result{}, nil
+	}
+	if endpoints.Spec.IngressInfo.IngressType != incv1alpha1.NODE_PORT {
+		return false, ctrl.Result{}, fmt.Errorf("unsupported ingress type %s", endpoints.Spec.IngressInfo.IngressType)
+	}
+
+	ingressEntities := map[string]*pbt.TunneledEntities{}
+	for _, ingressNode := range endpoints.Spec.IngressInfo.NodeNames {
+		ingressEntities[ingressNode] = &pbt.TunneledEntities{
+			Entities: []*pbt.TunneledEntity{
+				{
+					TunneledIp: ANY_IPv4,
+					Port: nil,
+				},
+			},
+		}
+	}
+
+	sendTelemetryRequest := func(mode utils.TelemetryRequestType) (stop bool) {
+		sources := targetEntities
+		targets := ingressEntities
+		if mode == utils.INGRESS_TO_PODS {
+			sources = ingressEntities
+			targets = targetEntities
+		}
+		req := &pbt.EnableTelemetryRequest{
+			ProgramName: endpoints.Spec.ProgramName,
+			CollectionId: utils.BuildCollectionName(endpoints.Name, mode),
+			CollectorNodeName: endpoints.Spec.CollectorNodeName,
+			CollectorPort: 6000, // TODO
+			Sources: &pbt.EnableTelemetryRequest_TunneledSources{
+				TunneledSources: &pbt.TunneledTelemetryEntities{
+					DeviceNamesWithEntities: sources,	
+				},
+			},
+			Targets: &pbt.EnableTelemetryRequest_TunneledTargets{
+				TunneledTargets: &pbt.TunneledTelemetryEntities{
+					DeviceNamesWithEntities: targets,	
+				},
+			},
+		}
+		var resp *pbt.EnableTelemetryResponse
+		err = r.withTelemetryClient(shim.Spec.SdnConfig.SdnGrpcAddr, func(tsc pbt.TelemetryServiceClient) error {
+			response, er := tsc.EnableTelemetry(ctx, req)
+			if er != nil {
+				return er
+			}
+			resp = response
+			return nil
+		})
+		if err != nil {
+			return true
+		}
+		if resp.TelemetryState == pbt.TelemetryState_IN_PROGRESS || resp.TelemetryState == pbt.TelemetryState_FAILED {
+			continueReconciliation = false
+			res = ctrl.Result{RequeueAfter: time.Second * 5}
+			return true
+		}
+		return false
+	}
+
+
+	if endpoints.Spec.MonitoringPolicy == incv1alpha1.MONITOR_ALL ||
+	   endpoints.Spec.MonitoringPolicy == incv1alpha1.MONITOR_EXTERNAL_TO_PODS {
+		if stop := sendTelemetryRequest(utils.INGRESS_TO_PODS); stop {
+			return
+		}
+	}
+
+	if endpoints.Spec.MonitoringPolicy == incv1alpha1.MONITOR_ALL ||
+	   endpoints.Spec.MonitoringPolicy == incv1alpha1.MONITOR_PODS_TO_EXTERNAL {
+		if stop := sendTelemetryRequest(utils.PODS_TO_INGRESS); stop {
+			return
+		}
+	}
+
+	for i := range endpoints.Spec.Entries {
+		endpoints.Spec.Entries[i].EntryStatus = incv1alpha1.EP_READY
+	}
+	if err = r.Update(ctx, endpoints); err != nil {
+		log.Error(err, "Failed to update endpoints even though requests went through")
+		return	
+	}
+	
+	endpoints.Status.InternalIngressInfo = &endpoints.Spec.IngressInfo
+	endpoints.Status.InternalMonitoringPolicy = &endpoints.Spec.MonitoringPolicy
+	
+	err = r.Status().Update(ctx, endpoints)
+	continueReconciliation = false
+	res = ctrl.Result{Requeue: true}
+	return
+}
+
 func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetry(
 	ctx context.Context,
 	endpoints *incv1alpha1.ExternalInNetworkTelemetryEndpoints,
@@ -186,10 +267,8 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetr
 ) (continueReconciliation bool, res ctrl.Result, err error) {
 	continueReconciliation = true
 	err = nil
-	changed := endpoints.Status.InitializedIngressInfo == nil || endpoints.Status.MonitoringPolicy == nil || 
-			   endpoints.Spec.IngressInfo.IngressType != endpoints.Spec.IngressInfo.IngressType ||
- 			   !slices.Equal(endpoints.Spec.IngressInfo.NodeNames, endpoints.Status.InitializedIngressInfo.NodeNames) ||
-			   endpoints.Spec.MonitoringPolicy != *endpoints.Status.MonitoringPolicy
+	changed := utils.MonitoringPolicyChanged(endpoints.Spec.MonitoringPolicy, endpoints.Status.ExternalMonitoringPolicy) ||
+			   utils.IngressInfoChanged(endpoints.Spec.IngressInfo, endpoints.Status.ExternalIngressInfo)
 	if !changed {
 		return
 	}
@@ -270,8 +349,8 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetr
 		}
 	}
 	
-	endpoints.Status.InitializedIngressInfo = &endpoints.Spec.IngressInfo
-	endpoints.Status.MonitoringPolicy = &endpoints.Spec.MonitoringPolicy
+	endpoints.Status.ExternalIngressInfo = &endpoints.Spec.IngressInfo
+	endpoints.Status.ExternalMonitoringPolicy = &endpoints.Spec.MonitoringPolicy
 	
 	err = r.Status().Update(ctx, endpoints)
 	continueReconciliation = false
@@ -291,7 +370,7 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetr
 func (r *ExternalInNetworkTelemetryEndpointsReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	log.Info("Handling endpoints ---")
+	log.Info("Handling endpoints")
 
 	endpoints := &incv1alpha1.ExternalInNetworkTelemetryEndpoints{}
 	if err := r.Get(ctx, req.NamespacedName, endpoints); err != nil {
@@ -317,38 +396,8 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) Reconcile(ctx context.Co
 		return res, err	
 	}
 
-	if enableTelemetryRequest, stateChanged := r.buildEnableTelemetryRequestIfChangeDetected(ctx, endpoints); stateChanged {
-		var resp *pbt.EnableTelemetryResponse
-		err = r.withTelemetryClient(shim.Spec.SdnConfig.TelemetryServiceGrpcAddr, func(tsc pbt.TelemetryServiceClient) error {
-			enableResp, err := tsc.EnableTelemetry(ctx, enableTelemetryRequest)
-			if err != nil {
-				return err
-			}
-			resp = enableResp
-			return nil
-		})	
-		if err != nil {
-			log.Error(err, "Failed to make enable telemetry request")
-			return ctrl.Result{}, err
-		}
-		switch resp.TelemetryState {
-		case pbt.TelemetryState_IN_PROGRESS:
-			log.Info("Enabling telemetry is in progress")
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		case pbt.TelemetryState_FAILED:
-			log.Info("Failed to set telemetry")
-			return ctrl.Result{RequeueAfter: 5 * time.Second}, nil
-		case pbt.TelemetryState_OK:
-			for i := range endpoints.Spec.Entries {
-				endpoints.Spec.Entries[i].EntryStatus = incv1alpha1.EP_READY
-			}
-			if err := r.Update(ctx, endpoints); err != nil {
-				log.Error(err, "Failed to update endpoints even though request went through")	
-				return ctrl.Result{}, err
-			}
-		default:
-			panic("unexpected telemetry state")
-		}
+	if continueReconciliation, res, err := r.reconcilePodTelemetry(ctx, endpoints, shim); !continueReconciliation {
+		return res, err	
 	}
 
 	return ctrl.Result{}, nil
