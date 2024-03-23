@@ -59,12 +59,12 @@ func main() {
 	p4Config := generated.V3_grpc_p4_conf_raw(false)
 	telemetryService := telemetry.NewTelemetryService()
 	kindaSdn := controller.NewKindaSdn(topo, p4Config, telemetryService)
-	fmt.Println("Initializing topology")
-	if err := kindaSdn.InitTopology(); err != nil {
-		fmt.Println("Failed to init topology")
-		fmt.Println(err)
-		return
-	}
+	// fmt.Println("Initializing topology")
+	// if err := kindaSdn.InitTopology(); err != nil {
+	// 	fmt.Println("Failed to init topology")
+	// 	fmt.Println(err)
+	// 	return
+	// }
 	fmt.Println("Running gRpc server")
 
 	err := runServer(kindaSdn, "127.0.0.1:9001")
