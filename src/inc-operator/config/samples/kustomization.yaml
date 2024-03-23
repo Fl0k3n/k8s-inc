@@ -2,4 +2,5 @@
 resources:
 - inc_v1alpha1_externalinnetworktelemetrydeployment.yaml
 - inc_v1alpha1_externalinnetworktelemetryendpoint.yaml
+- inc_v1alpha1_internalinnetworktelemetrydeployment.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

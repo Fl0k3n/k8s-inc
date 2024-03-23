@@ -1,0 +1,14 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: r1
+spec:
+  arch: bmv2
+  programName: telemetry
+  resources:
+    memory: 128Mi
+    # ...
+status:
+  registers: ...
+  counters: ...
+  flows: ...

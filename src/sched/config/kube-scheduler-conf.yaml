@@ -1,0 +1,16 @@
+apiVersion: kubescheduler.config.k8s.io/v1
+kind: KubeSchedulerConfiguration
+clientConnection:
+  kubeconfig: /etc/kubernetes/scheduler.conf
+profiles:
+  - schedulerName: default-scheduler
+  - schedulerName: internal-telemetry
+    plugins:
+      score:
+        enabled:
+          - name: InternalTelemetry
+        disabled:
+          - name: "*"
+      filter:
+        enabled:
+          - name: InternalTelemetry

@@ -1,0 +1,19 @@
+apiVersion: inc.example.com/v1alpha1
+kind: p4program
+metadata:
+  name: telemetry
+spec:
+  managedBy: telemetry-controller
+  
+  artifacts:
+    - arch: bmv2
+      p4info: infoPath
+      p4pipeline: pipelinePath
+      resources:
+        requests:
+          memory: 32Mi # ?
+          # ...
+
+    - arch: anotherArch # eg tofino
+      p4Info: infoPath
+      p4pipeline: pipelinePath

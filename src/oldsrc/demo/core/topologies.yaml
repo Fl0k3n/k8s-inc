@@ -1,0 +1,67 @@
+# kubectl get topology -o yaml
+
+#           internet ----------- r5 ------- r6 --- r8 
+#               |                |          |
+#               r4               w4         r7
+#               |
+#     r1 - r2 - r3-----
+#     |     |    |    |
+#     w1    w2   w3   c1
+
+apiVersion: inc.kntp.com/v1alpha1
+kind: Topology
+metadata:
+  name: cluster-topo
+spec:
+  graph:
+    - links:
+        - peerName: r2
+        - peerName: w1
+      name: r1
+      type: inc-switch
+
+    - links:
+        - peerName: r1
+        - peerName: r3
+        - peerName: w2
+      name: r2
+      type: inc-switch
+
+    - links:
+        - peerName: r2
+        - peerName: w3
+        - peerName: c1
+        - peerName: r4
+      name: r3
+      type: inc-switch
+
+    - links:
+        - peerName: r3
+        - peerName: internet
+      name: r4
+      type: inc-switch
+
+    - links:
+        - peerName: r1
+      name: w1
+      type: node
+
+    - links:
+        - peerName: r2
+      name: w2
+      type: node
+
+    - links:
+        - peerName: r3
+      name: w3
+      type: node
+
+    - links:
+        - peerName: r3
+      name: w3
+      type: node
+
+    - links:
+        - peerName: r4
+      name: internet
+      type: external

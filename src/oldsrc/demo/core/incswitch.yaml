@@ -1,0 +1,11 @@
+# kubectl get incswitch -o yaml
+
+apiVersion: inc.kntp.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: r1
+spec:
+  arch: bmv2
+  programName: telemetry
+status:
+  installedProgramName: telemetry

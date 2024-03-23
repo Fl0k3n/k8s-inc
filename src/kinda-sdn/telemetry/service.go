@@ -177,7 +177,7 @@ func (t *TelemetryService) findPortLeadingToDevice(G model.TopologyGraph, source
 	visited := map[string]bool{}
 	reversedPath := []string{}
 	dfs(G, target.GetName(), source.GetName(), &reversedPath, visited)
-	succesor := reversedPath[1]
+	succesor := reversedPath[len(reversedPath) - 2]
 	for i, link := range source.GetLinks() {
 		if link.To == succesor {
 			return i

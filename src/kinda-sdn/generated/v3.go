@@ -11,7 +11,7 @@ func V3_grpc_topo() *model.Topology {
 		BaseDevice: model.BaseDevice{
 			Name: "internet",
 			Links: []*model.Link{
-				model.NewLink("r3", "", "", -1),
+				model.NewLink("r4", "", "", -1),
 			},
 		},
 	}
@@ -40,9 +40,18 @@ func V3_grpc_topo() *model.Topology {
 			model.NewLink("r2", "00:00:0a:00:00:0a", "10.10.3.2", 24),
 			model.NewLink("w3", "00:00:0a:00:00:0b", "10.10.4.1", 24),
 			model.NewLink("c1", "00:00:0a:00:00:0c", "10.10.5.1", 24),
-			model.NewLink("internet", "00:00:0a:00:00:0d", "10.10.6.1", 24),
+			model.NewLink("r4", "00:00:0a:00:00:0d", "10.10.6.1", 24),
 		},
 		"127.0.0.1:9562",
+	)
+
+	r4 := model.NewBmv2IncSwitch(
+		"r4",
+		[]*model.Link{
+			model.NewLink("r3", "00:00:0a:00:00:0e", "10.10.6.2", 24),
+			model.NewLink("internet", "00:00:0a:00:0f:01", "10.10.7.1", 24),
+		},
+		"127.0.0.1:9563",
 	)
 
 	w1 := &model.Host{
@@ -83,7 +92,7 @@ func V3_grpc_topo() *model.Topology {
 
 	return &model.Topology{
 		Devices:[]model.Device{
-			r1, r2, r3, w1, w2, w3, c1, internet,
+			r1, r2, r3, r4, w1, w2, w3, c1, internet,
 		},
 	}
 }
@@ -97,6 +106,7 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.4.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Forward("10.10.5.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Forward("10.10.6.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
+			t.Forward("10.10.7.0/24", "00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			// t.DefaultRoute("00:00:0a:00:00:05", "00:00:0a:00:00:07", "1"),
 			t.Arp("10.10.0.1", "00:00:0a:00:00:06"),
 		},
@@ -107,6 +117,7 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.4.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Forward("10.10.5.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Forward("10.10.6.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
+			t.Forward("10.10.7.0/24", "00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			// t.DefaultRoute("00:00:0a:00:00:08", "00:00:0a:00:00:0a", "2"),
 			t.Arp("10.10.2.1", "00:00:0a:00:00:09"),
 		},
@@ -116,11 +127,16 @@ func V3_grpc_p4_conf_raw(addTelemetryEntries bool) map[model.DeviceName][]connec
 			t.Forward("10.10.0.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
 			t.Forward("10.10.1.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
 			t.Forward("10.10.2.0/24", "00:00:0a:00:00:0a", "00:00:0a:00:00:08", "1"),
-			t.Forward("10.10.6.0/24", "00:00:0a:00:0f:02", "00:00:0a:00:0f:01", "4"),
+			t.Forward("10.10.7.0/24", "00:00:0a:00:00:0d", "00:00:0a:00:00:0e", "4"),
 			// t.DefaultRoute("00:00:0a:00:0f:02", "00:00:0a:00:0f:01", "4"),
 			t.Arp("10.10.4.1", "00:00:0a:00:00:0b"),
 			t.Arp("10.10.5.1", "00:00:0a:00:00:0c"),
 			t.Arp("10.10.6.1", "00:00:0a:00:0f:02"),
+		},
+		"r4": {
+			t.Forward("10.10.0.0/16", "00:00:0a:00:00:0e", "00:00:0a:00:00:0d", "1"),
+			t.Forward("10.10.7.0/24", "00:00:0a:00:0f:01", "00:00:0a:00:0f:02", "2"),
+			t.Arp("10.10.7.1", "00:00:0a:00:0f:01"),
 		},
 	}
 

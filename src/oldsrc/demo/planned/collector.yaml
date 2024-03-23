@@ -1,0 +1,10 @@
+apiVersion: inc.example.com/v1alpha1
+kind: IntCollector
+metadata:
+  name: testCollector
+spec:
+  config: ...
+  daemonSetTemplate: ...
+status:
+  nodeName: w2
+  podReference: ...
