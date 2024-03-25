@@ -17,19 +17,25 @@ limitations under the License.
 package v1alpha1
 
 import (
+	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
+type NamedDeploymentSpec struct {
+	Template appsv1.DeploymentSpec `json:"template"`
+	Name string `json:"name"`
+}
+
+
 // InternalInNetworkTelemetryDeploymentSpec defines the desired state of InternalInNetworkTelemetryDeployment
 type InternalInNetworkTelemetryDeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-
-	// Foo is an example field of InternalInNetworkTelemetryDeployment. Edit internalinnetworktelemetrydeployment_types.go to remove/update
-	Foo string `json:"foo,omitempty"`
+	RequiredProgram string `json:"requiredProgram"`
+	DeploymentTemplates []NamedDeploymentSpec `json:"deployments"`
 }
 
 // InternalInNetworkTelemetryDeploymentStatus defines the observed state of InternalInNetworkTelemetryDeployment

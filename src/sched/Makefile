@@ -30,6 +30,7 @@ install:
 	docker cp $(ROOT_DIR)/config/kube-scheduler-conf.yaml $(CONTROL_PLANE_CONTAINER_ID):/etc/kubernetes/kube-scheduler-conf.yaml
 	docker cp $(ROOT_DIR)/config/kube-scheduler.yaml $(CONTROL_PLANE_CONTAINER_ID):/etc/kubernetes/manifests/kube-scheduler.yaml
 	docker exec $(CONTROL_PLANE_CONTAINER_ID) systemctl restart kubelet.service
+	make manifests
 	make restart
 
 .PHONY: all
@@ -50,6 +51,7 @@ install-debug:
 	make load-image
 	docker cp $(ROOT_DIR)/config/kube-scheduler-conf.yaml $(CONTROL_PLANE_CONTAINER_ID):/etc/kubernetes/kube-scheduler-conf.yaml
 	docker cp $(ROOT_DIR)/config/kube-scheduler-debug.yaml $(CONTROL_PLANE_CONTAINER_ID):/etc/kubernetes/manifests/kube-scheduler.yaml
+	make manifests
 	make restart
 
 .PHONY: debug-info
@@ -58,7 +60,6 @@ debug-info:
 
 .PHONY: all-debug
 all-debug: build-debug install-debug
-
 
 # ---- utils
 
@@ -79,3 +80,8 @@ restart:
 update-scheduler-config:
 	docker cp $(ROOT_DIR)/config/kube-scheduler-conf.yaml $(CONTROL_PLANE_CONTAINER_ID):/etc/kubernetes/kube-scheduler-conf.yaml
 	make restart
+
+
+.PHONY: manifests
+manifests:
+	kubectl apply -f $(ROOT_DIR)/config/rbac.yaml
