@@ -34,6 +34,7 @@ type Device interface {
 	GetPortNumberTo(DeviceName) (p int, ok bool)
 	MustGetPortNumberTo(DeviceName) int
 	MustGetLinkTo(DeviceName) *Link
+	Equals(Device) bool
 }
 
 func NewLink(to DeviceName, mac string, ipv4 string, mask int) *Link {
@@ -58,6 +59,7 @@ func (b *BaseDevice) GetLinks() []*Link {
 	return b.Links
 }
 
+// 0 based, increment if used in bmv2
 func (b *BaseDevice) GetPortNumberTo(name DeviceName) (int, bool) {
 	for i, link := range b.GetLinks() {
 		if link.To == name {
@@ -67,6 +69,7 @@ func (b *BaseDevice) GetPortNumberTo(name DeviceName) (int, bool) {
 	return 0, false
 }
 
+// 0 based, increment if used in bmv2
 func (b *BaseDevice) MustGetPortNumberTo(name DeviceName) int {
 	res, ok := b.GetPortNumberTo(name)
 	if !ok {
@@ -77,6 +80,13 @@ func (b *BaseDevice) MustGetPortNumberTo(name DeviceName) int {
 
 func (b *BaseDevice) MustGetLinkTo(name DeviceName) *Link {
 	return b.GetLinks()[b.MustGetPortNumberTo(name)]
+}
+
+func (b *BaseDevice) Equals(other Device) bool {
+	if other == nil {
+		return false
+	}
+	return b.Name == other.GetName()
 }
 
 type IncSwitch struct {

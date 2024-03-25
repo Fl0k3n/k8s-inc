@@ -16,6 +16,8 @@ type DeviceProvider = func(model.DeviceName) device.IncSwitch
 
 const TELEMETRY_MTU = 1500
 
+const PROGRAM_INTERFACE = "telemetry"
+
 type TelemetryService struct {
 	entityMapLock sync.Mutex
 	entityLocks map[string]*sync.Mutex
@@ -28,6 +30,16 @@ func NewTelemetryService() *TelemetryService {
 		entityLocks: make(map[string]*sync.Mutex),
 		transitCounters: sync.Map{},
 	}
+}
+
+func (t *TelemetryService) GetArpEntry(reqIp string, respMac string) connector.RawTableEntry {
+	return Arp(reqIp, respMac)
+}
+func (t *TelemetryService) GetForwardEntry(maskedIp string, srcMac string, dstMac string, port int) connector.RawTableEntry {
+	return Forward(maskedIp, srcMac, dstMac, fmt.Sprintf("%d", port))
+}
+func (t *TelemetryService) GetDefaultRouteEntry(srcMac string, dstMac string, port int) connector.RawTableEntry {
+	return DefaultRoute(srcMac, dstMac, fmt.Sprintf("%d", port))
 }
 
 func (t *TelemetryService) InitDevices(ctx context.Context, topo *model.Topology, deviceProvider DeviceProvider) error {

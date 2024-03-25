@@ -3,7 +3,9 @@ module github.com/Fl0k3n/k8s-inc/kinda-sdn
 require github.com/Fl0k3n/k8s-inc/proto v0.0.1
 
 require (
+	github.com/gammazero/deque v0.2.1
 	github.com/go-logr/logr v1.4.1 // indirect
+	github.com/hashicorp/go-set v0.1.14
 	github.com/p4lang/p4runtime v1.4.0-rc.5 // indirect
 	sigs.k8s.io/controller-runtime v0.17.2 // indirect
 )

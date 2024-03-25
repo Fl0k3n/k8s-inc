@@ -56,16 +56,22 @@ func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch) error {
 	if err := bmv2.InstallProgram(binPath, p4infoPath); err != nil{
 		return err
 	}
-	incSwitch.InstalledProgram = "telemetry"
+	incSwitch.InstalledProgram = telemetry.PROGRAM_INTERFACE
+	return nil
+}
 
-	entries := k.initialP4Config[incSwitch.Name]
-	if err := bmv2.WriteInitialEntries(ctx, entries); err != nil {
-		return err
+func (k *KindaSdn) writeInitialEntriesToBmv2Switches(entries map[model.DeviceName][]connector.RawTableEntry) error {
+	ctx := context.Background()
+	for devName, ents := range entries {
+		if err := k.bmv2Managers[devName].WriteInitialEntries(ctx, ents); err != nil {
+			return err
+		}
 	}
 	return nil
 }
 
-func (k *KindaSdn) InitTopology() error {
+func (k *KindaSdn) InitTopology(setupL3Forwarding bool) error {
+	entries := k.initialP4Config
 	for _, dev := range k.topo.Devices {
 		if dev.GetType() == model.INC_SWITCH {
 			if err := k.bootstrapSwitch(dev.(*model.IncSwitch)); err != nil {
@@ -74,6 +80,20 @@ func (k *KindaSdn) InitTopology() error {
 			}
 		}
 	}
+	if setupL3Forwarding {
+		l3Entries := k.buildBasicForwardingEntries()
+		for devName, ents := range l3Entries {
+			if presentEntries, arePresent := entries[devName]; arePresent {
+				entries[devName] = append(presentEntries, ents...)
+			} else {
+				entries[devName] = ents
+			}
+		}
+	}
+	if err := k.writeInitialEntriesToBmv2Switches(entries); err != nil {
+		return err
+	}
+
 	ctx := context.Background()
 	if err := k.telemetryService.InitDevices(ctx, k.topo, func(dn model.DeviceName) device.IncSwitch {
 		return k.bmv2Managers[dn]
