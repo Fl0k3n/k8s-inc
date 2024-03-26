@@ -11,6 +11,8 @@ require (
 	sigs.k8s.io/controller-runtime v0.14.1
 )
 
+require github.com/hashicorp/go-set v0.1.14 // indirect
+
 replace github.com/Fl0k3n/k8s-inc/proto => ../proto/go
 
 require (

@@ -9,6 +9,7 @@ import (
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/controller"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	"github.com/Fl0k3n/k8s-inc/kinda-sdn/programs"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/telemetry"
 	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
@@ -54,15 +55,36 @@ func updateNames(topo *model.Topology) {
 	}
 }
 
+func getDefaultTelemetryProgramDetails() *model.P4ProgramDetails {
+	defaultProgramName := "telemetry-v5"
+	interfaces := []string{telemetry.PROGRAM_INTERFACE}	
+
+	binPath, p4InfoPath := generated.V3_telemetry_artifact_paths()
+	return model.NewProgramDetails(
+		defaultProgramName,
+		interfaces,
+		[]model.P4Artifacts{
+			{
+				Arch: model.BMv2,
+				P4InfoPath: p4InfoPath,
+				P4PipelinePath: binPath,
+			},
+		},
+	)
+}
+
 func main() {
 	topo := generated.V4_gRpc_topo()
 	// updateNames(topo)
-	// p4Config := generated.V3_grpc_p4_conf_raw(false)
-	telemetryService := telemetry.NewTelemetryService()
-	// kindaSdn := controller.NewKindaSdn(topo, p4Config, telemetryService)
-	kindaSdn := controller.NewKindaSdn(topo, map[string][]connector.RawTableEntry{}, telemetryService)
+	telemetryService := telemetry.NewService()
+
+	defaultProgram := getDefaultTelemetryProgramDetails()
+	programRegistry := programs.NewRegistry()
+	programRegistry.Register(*defaultProgram, telemetryService)
+
+	kindaSdn := controller.NewKindaSdn(topo, programRegistry, map[string][]connector.RawTableEntry{}, telemetryService)
 	fmt.Println("Initializing topology")
-	if err := kindaSdn.InitTopology(true); err != nil {
+	if err := kindaSdn.InitTopology(true, defaultProgram.Name); err != nil {
 		fmt.Println("Failed to init topology")
 		fmt.Println(err)
 		return

@@ -96,6 +96,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "SDNShim")
 		os.Exit(1)
 	}
+	if err = (&controllers.P4ProgramReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "P4Program")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

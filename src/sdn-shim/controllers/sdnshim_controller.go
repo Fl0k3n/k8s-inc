@@ -20,11 +20,14 @@ import (
 	"context"
 	"errors"
 
+	sets "github.com/hashicorp/go-set"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -55,6 +58,9 @@ type SDNShimReconciler struct {
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=incswitches/finalizers,verbs=update
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs/status,verbs=get;update;patch
+//+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs/finalizers,verbs=update
 
 
 func (r *SDNShimReconciler) runSdnClient(grpcAddr string) error {
@@ -146,6 +152,46 @@ func (r *SDNShimReconciler) reconcileTopology(ctx context.Context, req ctrl.Requ
 	return &topos.Items[0], false, nil
 }
 
+func (r *SDNShimReconciler) reconcileP4Programs(ctx context.Context, req ctrl.Request, programNames *sets.Set[string]) error {
+	// TODO maybe move it to p4program controller and watch for incswitch changes there
+	log := log.FromContext(ctx)
+	for _, programName := range programNames.Slice() {
+		resourceKey := types.NamespacedName{Name: programName, Namespace: req.Namespace}
+		p4program := &incv1alpha1.P4Program{}
+		if err := r.Get(ctx, resourceKey, p4program); err != nil {
+			if apierrors.IsNotFound(err) {
+				programDetailsResp, err := r.sdnClient.GetProgramDetails(ctx, &pb.ProgramDetailsRequest{
+					ProgramName: programName,
+				})
+				if err != nil {
+					return err
+				}
+				p4program = &incv1alpha1.P4Program{
+					ObjectMeta: ctrl.ObjectMeta{
+						Name: programName,
+						Namespace: req.Namespace,
+					},
+					Spec: incv1alpha1.P4ProgramSpec{
+						ImplementedInterfaces: programDetailsResp.ImplementedInterfaces,
+						Artifacts: []incv1alpha1.ProgramArtifacts{},
+					},
+				}
+				if err := r.Create(ctx, p4program); err != nil {
+					log.Error(err, "Failed to create p4program")					
+					return err
+				}
+			} else {
+				log.Error(err, "Failed to get p4program")
+				return err
+			}
+		} else {
+			// TODO check if program state matches
+			_ = p4program
+		}
+	}
+	return nil
+}
+
 func (r *SDNShimReconciler) reconcileIncSwitches(ctx context.Context, req ctrl.Request, topo *incv1alpha1.Topology) error {
 	log := log.FromContext(ctx)
 	switchList := &incv1alpha1.IncSwitchList{}
@@ -204,15 +250,20 @@ func (r *SDNShimReconciler) reconcileIncSwitches(ctx context.Context, req ctrl.R
 			log.Error(err, "Failed to fetch switch details")
 			return err
 		} else {
+			programNames := sets.New[string](0)
 			for _, switchDetails := range details.Details {
 				if err := r.Client.Create(ctx, r.buildIncSwitchCR(switchDetails, req)); err != nil {
 					log.Error(err, "Failed to add switch details")
 					return err
 				}
+				programNames.Insert(switchDetails.InstalledProgram)
+			}
+			if err := r.reconcileP4Programs(ctx, req, programNames); err != nil {
+				log.Error(err, "Failed to reconcile p4 programs")
+				return err
 			}
 		}
 	}
-
 	return nil
 }
 

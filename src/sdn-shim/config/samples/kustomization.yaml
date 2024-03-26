@@ -3,4 +3,5 @@ resources:
 - inc_v1alpha1_topology.yaml
 - inc_v1alpha1_incswitch.yaml
 - inc_v1alpha1_sdnshim.yaml
+- inc_v1alpha1_p4program.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

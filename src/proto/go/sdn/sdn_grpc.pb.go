@@ -25,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 type SdnFrontendClient interface {
 	GetTopology(ctx context.Context, in *emptypb.Empty, opts ...grpc.CallOption) (*TopologyResponse, error)
 	GetSwitchDetails(ctx context.Context, in *SwitchNames, opts ...grpc.CallOption) (*SwitchDetailsResponse, error)
+	GetProgramDetails(ctx context.Context, in *ProgramDetailsRequest, opts ...grpc.CallOption) (*ProgramDetailsResponse, error)
 }
 
 type sdnFrontendClient struct {
@@ -53,12 +54,22 @@ func (c *sdnFrontendClient) GetSwitchDetails(ctx context.Context, in *SwitchName
 	return out, nil
 }
 
+func (c *sdnFrontendClient) GetProgramDetails(ctx context.Context, in *ProgramDetailsRequest, opts ...grpc.CallOption) (*ProgramDetailsResponse, error) {
+	out := new(ProgramDetailsResponse)
+	err := c.cc.Invoke(ctx, "/sdn.SdnFrontend/GetProgramDetails", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // SdnFrontendServer is the server API for SdnFrontend service.
 // All implementations must embed UnimplementedSdnFrontendServer
 // for forward compatibility
 type SdnFrontendServer interface {
 	GetTopology(context.Context, *emptypb.Empty) (*TopologyResponse, error)
 	GetSwitchDetails(context.Context, *SwitchNames) (*SwitchDetailsResponse, error)
+	GetProgramDetails(context.Context, *ProgramDetailsRequest) (*ProgramDetailsResponse, error)
 	mustEmbedUnimplementedSdnFrontendServer()
 }
 
@@ -71,6 +82,9 @@ func (UnimplementedSdnFrontendServer) GetTopology(context.Context, *emptypb.Empt
 }
 func (UnimplementedSdnFrontendServer) GetSwitchDetails(context.Context, *SwitchNames) (*SwitchDetailsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSwitchDetails not implemented")
+}
+func (UnimplementedSdnFrontendServer) GetProgramDetails(context.Context, *ProgramDetailsRequest) (*ProgramDetailsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetProgramDetails not implemented")
 }
 func (UnimplementedSdnFrontendServer) mustEmbedUnimplementedSdnFrontendServer() {}
 
@@ -121,6 +135,24 @@ func _SdnFrontend_GetSwitchDetails_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SdnFrontend_GetProgramDetails_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ProgramDetailsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(SdnFrontendServer).GetProgramDetails(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/sdn.SdnFrontend/GetProgramDetails",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(SdnFrontendServer).GetProgramDetails(ctx, req.(*ProgramDetailsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // SdnFrontend_ServiceDesc is the grpc.ServiceDesc for SdnFrontend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -135,6 +167,10 @@ var SdnFrontend_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSwitchDetails",
 			Handler:    _SdnFrontend_GetSwitchDetails_Handler,
+		},
+		{
+			MethodName: "GetProgramDetails",
+			Handler:    _SdnFrontend_GetProgramDetails_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

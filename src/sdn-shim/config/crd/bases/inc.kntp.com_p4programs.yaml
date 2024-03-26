@@ -5,20 +5,20 @@ metadata:
   annotations:
     controller-gen.kubebuilder.io/version: v0.11.1
   creationTimestamp: null
-  name: incswitches.inc.kntp.com
+  name: p4programs.inc.kntp.com
 spec:
   group: inc.kntp.com
   names:
-    kind: IncSwitch
-    listKind: IncSwitchList
-    plural: incswitches
-    singular: incswitch
+    kind: P4Program
+    listKind: P4ProgramList
+    plural: p4programs
+    singular: p4program
   scope: Namespaced
   versions:
   - name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: IncSwitch is the Schema for the incswitches API
+        description: P4Program is the Schema for the p4programs API
         properties:
           apiVersion:
             description: 'APIVersion defines the versioned schema of this representation
@@ -33,24 +33,33 @@ spec:
           metadata:
             type: object
           spec:
-            description: IncSwitchSpec defines the desired state of IncSwitch
+            description: P4ProgramSpec defines the desired state of P4Program
             properties:
-              arch:
-                type: string
-              programName:
-                type: string
+              artifacts:
+                items:
+                  properties:
+                    P4PipelineUrl:
+                      type: string
+                    arch:
+                      type: string
+                    p4InfoUrl:
+                      type: string
+                  required:
+                  - P4PipelineUrl
+                  - arch
+                  - p4InfoUrl
+                  type: object
+                type: array
+              implements:
+                items:
+                  type: string
+                type: array
             required:
-            - arch
-            - programName
+            - artifacts
+            - implements
             type: object
           status:
-            description: IncSwitchStatus defines the observed state of IncSwitch
-            properties:
-              installedProgram:
-                description: 'INSERT ADDITIONAL STATUS FIELD - define observed state
-                  of cluster Important: Run "make" to regenerate code after modifying
-                  this file'
-                type: string
+            description: P4ProgramStatus defines the observed state of P4Program
             type: object
         type: object
     served: true

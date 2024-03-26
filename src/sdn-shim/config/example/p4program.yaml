@@ -1,0 +1,11 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: P4Program
+metadata:
+  name: telemetry-v5
+spec:
+  implements:
+    - inc.kntp.com/v1alpha1/telemetry
+  artifacts:
+    - arch: bmv2
+      p4info: infoPath
+      p4pipeline: pipelinePath

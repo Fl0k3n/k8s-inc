@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/device"
-	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	"github.com/Fl0k3n/k8s-inc/kinda-sdn/programs"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/telemetry"
 	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
@@ -16,6 +16,7 @@ import (
 type KindaSdn struct {
 	pb.UnimplementedSdnFrontendServer
 	pbt.UnimplementedTelemetryServiceServer
+	programRegistry programs.P4ProgramRegistry
 	topo *model.Topology
 	initialP4Config map[model.DeviceName][]connector.RawTableEntry
 	telemetryService *telemetry.TelemetryService
@@ -24,11 +25,13 @@ type KindaSdn struct {
 
 func NewKindaSdn(
 	topo *model.Topology,
+	programRegistry programs.P4ProgramRegistry,
 	initialP4Config map[model.DeviceName][]connector.RawTableEntry,
 	telemetryService *telemetry.TelemetryService,
 ) *KindaSdn {
 	return &KindaSdn{
 		topo: topo,
+		programRegistry: programRegistry,
 		initialP4Config: initialP4Config,
 		telemetryService: telemetryService,
 		bmv2Managers: make(map[string]*device.Bmv2Manager),
@@ -41,22 +44,26 @@ func (k *KindaSdn) Close() {
 	}
 }
 
-func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch) error {
+func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch, programDetails *model.P4ProgramDetails) error {
 	ctx := context.Background()
 	if incSwitch.Arch != model.BMv2 {
-		panic("must be bmv2")	
+		panic("must be bmv2")
 	}
+	artifacts, ok := programDetails.GetArtifactsFor(incSwitch.Arch) 
+	if !ok {
+		panic("couldn't find artifacts")
+	}
+
 	bmv2 := device.NewBmv2Manager(incSwitch.GrpcUrl)
 	if err := bmv2.Open(ctx); err != nil {
 		return err
 	}
 	k.bmv2Managers[incSwitch.Name] = bmv2
 
-	binPath, p4infoPath := generated.V3_telemetry_artifact_paths()
-	if err := bmv2.InstallProgram(binPath, p4infoPath); err != nil{
+	if err := bmv2.InstallProgram(artifacts.P4PipelinePath, artifacts.P4InfoPath); err != nil{
 		return err
 	}
-	incSwitch.InstalledProgram = telemetry.PROGRAM_INTERFACE
+	incSwitch.InstalledProgram = programDetails.Name
 	return nil
 }
 
@@ -70,11 +77,15 @@ func (k *KindaSdn) writeInitialEntriesToBmv2Switches(entries map[model.DeviceNam
 	return nil
 }
 
-func (k *KindaSdn) InitTopology(setupL3Forwarding bool) error {
+func (k *KindaSdn) InitTopology(setupL3Forwarding bool, programName string) error {
+	details, ok := k.programRegistry.Lookup(programName)
+	if !ok {
+		return fmt.Errorf("default program %s is unregistered", programName)
+	}
 	entries := k.initialP4Config
 	for _, dev := range k.topo.Devices {
 		if dev.GetType() == model.INC_SWITCH {
-			if err := k.bootstrapSwitch(dev.(*model.IncSwitch)); err != nil {
+			if err := k.bootstrapSwitch(dev.(*model.IncSwitch), &details); err != nil {
 				fmt.Printf("Failed to write entries for switch %s\n", dev.GetName())
 				return err
 			}

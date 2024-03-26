@@ -24,7 +24,7 @@ type TelemetryService struct {
 	transitCounters sync.Map // key = deviceName, val = counter of transit requests
 }
 
-func NewTelemetryService() *TelemetryService {
+func NewService() *TelemetryService {
 	return &TelemetryService{
 		entityMapLock: sync.Mutex{},
 		entityLocks: make(map[string]*sync.Mutex),

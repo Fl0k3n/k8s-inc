@@ -126,6 +126,32 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - internalinnetworktelemetryendpoints
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - internalinnetworktelemetryendpoints/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - internalinnetworktelemetryendpoints/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - nodes
   verbs:
   - get

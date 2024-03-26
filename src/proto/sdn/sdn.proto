@@ -9,6 +9,11 @@ package sdn;
 service SdnFrontend {
     rpc GetTopology(google.protobuf.Empty) returns (TopologyResponse) {}
     rpc GetSwitchDetails(SwitchNames) returns (SwitchDetailsResponse) {}
+    rpc GetProgramDetails(ProgramDetailsRequest) returns (ProgramDetailsResponse) {}
+
+    // k8s should be able to setup hooks for various changes and update etcd if needed
+    // this is more of a mock, we won't need anything like this in this local env
+    // rpc SubscribeTopologyChanges(google.protobuf.Empty) returns (stream TopologyUpdate) {} 
 }
 
 message Link {
@@ -44,4 +49,12 @@ message SwitchDetails {
 
 message SwitchDetailsResponse {
     map<string, SwitchDetails> details = 1;
+}
+
+message ProgramDetailsRequest {
+    string programName = 1;
+}
+
+message ProgramDetailsResponse {
+    repeated string implementedInterfaces = 2; 
 }

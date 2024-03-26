@@ -114,6 +114,13 @@ func main() {
 		setupLog.Error(err, "unable to create controller", "controller", "InternalInNetworkTelemetryDeployment")
 		os.Exit(1)
 	}
+	if err = (&controllers.InternalInNetworkTelemetryEndpointsReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "InternalInNetworkTelemetryEndpoints")
+		os.Exit(1)
+	}
 	//+kubebuilder:scaffold:builder
 
 	if err := mgr.AddHealthzCheck("healthz", healthz.Ping); err != nil {

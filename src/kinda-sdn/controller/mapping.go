@@ -5,7 +5,7 @@ import (
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
 )
 
-func LinkToDao(link *model.Link) *pb.Link {
+func LinkToProto(link *model.Link) *pb.Link {
 	return &pb.Link{
 		PeerName: string(link.To),
 	}
@@ -30,10 +30,10 @@ func convertDeviceType(device model.Device) pb.DeviceType {
 	return dt
 }
 
-func DeviceToDao(device model.Device) *pb.Device {
+func DeviceToProto(device model.Device) *pb.Device {
 	links := make([]*pb.Link, len(device.GetLinks()))
 	for i, link := range device.GetLinks() {
-		links[i] = LinkToDao(link)
+		links[i] = LinkToProto(link)
 	}
 	return &pb.Device{
 		Name: string(device.GetName()),
@@ -42,20 +42,26 @@ func DeviceToDao(device model.Device) *pb.Device {
 	}
 }
 
-func TopologyModelToDao(topo *model.Topology) *pb.TopologyResponse {
+func TopologyModelToProto(topo *model.Topology) *pb.TopologyResponse {
 	devices := make([]*pb.Device, len(topo.Devices))
 	for i, dev := range topo.Devices {
-		devices[i] = DeviceToDao(dev)
+		devices[i] = DeviceToProto(dev)
 	}
 	return &pb.TopologyResponse{
 		Graph: devices,
 	}
 }
 
-func IncSwitchToDetailsDao(s *model.IncSwitch) *pb.SwitchDetails {
+func IncSwitchToDetailsProto(s *model.IncSwitch) *pb.SwitchDetails {
 	return &pb.SwitchDetails{
 		Name: string(s.Name),
 		Arch: string(s.Arch),
 		InstalledProgram: s.InstalledProgram,
+	}
+}
+
+func ProgramDetailsToProto(pd *model.P4ProgramDetails) *pb.ProgramDetailsResponse {
+	return &pb.ProgramDetailsResponse{
+		ImplementedInterfaces: pd.ImplementedInterfaces,
 	}
 }

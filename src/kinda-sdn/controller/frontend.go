@@ -15,7 +15,16 @@ import (
 
 func (m *KindaSdn) GetTopology(context.Context, *emptypb.Empty) (*pb.TopologyResponse, error) {
 	fmt.Println("Handling getTopology")
-	return TopologyModelToDao(m.topo), nil
+	return TopologyModelToProto(m.topo), nil
+}
+
+func (m *KindaSdn) GetProgramDetails(ctx context.Context, req *pb.ProgramDetailsRequest) (*pb.ProgramDetailsResponse, error) {
+	fmt.Println("Handling getProgramDetails")
+	if programDetails, ok := m.programRegistry.Lookup(req.ProgramName); ok {
+		return ProgramDetailsToProto(&programDetails), nil
+	} else {
+		return nil, status.Errorf(codes.NotFound, "program %s is not registered", req.ProgramName)
+	}
 }
 
 func (m *KindaSdn) GetSwitchDetails(ctx context.Context, names *pb.SwitchNames) (*pb.SwitchDetailsResponse, error) {
@@ -33,7 +42,7 @@ func (m *KindaSdn) GetSwitchDetails(ctx context.Context, names *pb.SwitchNames) 
 			return nil, status.Errorf(codes.NotFound, "device %s not found", name)
 		}
 		if incSwitch, ok := device.(*model.IncSwitch); ok {
-			res[name] = IncSwitchToDetailsDao(incSwitch)
+			res[name] = IncSwitchToDetailsProto(incSwitch)
 		} else {
 			return nil, status.Errorf(codes.InvalidArgument, "device %s is not IncSwitch", name)
 		}

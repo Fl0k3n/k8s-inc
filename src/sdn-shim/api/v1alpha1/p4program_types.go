@@ -23,43 +23,48 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// IncSwitchSpec defines the desired state of IncSwitch
-type IncSwitchSpec struct {
+type ProgramArtifacts struct {
+	Arch string `json:"arch"`
+	P4InfoURL string `json:"p4InfoUrl"`
+	P4PipelineURL string `json:"P4PipelineUrl"`
+}
+
+// P4ProgramSpec defines the desired state of P4Program
+type P4ProgramSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Arch string `json:"arch"`
-	ProgramName string `json:"programName"`
+	Artifacts []ProgramArtifacts `json:"artifacts"`
+	ImplementedInterfaces []string `json:"implements"`
 }
 
-// IncSwitchStatus defines the observed state of IncSwitch
-type IncSwitchStatus struct {
+// P4ProgramStatus defines the observed state of P4Program
+type P4ProgramStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	InstalledProgram string `json:"installedProgram,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
 
-// IncSwitch is the Schema for the incswitches API
-type IncSwitch struct {
+// P4Program is the Schema for the p4programs API
+type P4Program struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 
-	Spec   IncSwitchSpec   `json:"spec,omitempty"`
-	Status IncSwitchStatus `json:"status,omitempty"`
+	Spec   P4ProgramSpec   `json:"spec,omitempty"`
+	Status P4ProgramStatus `json:"status,omitempty"`
 }
 
 //+kubebuilder:object:root=true
 
-// IncSwitchList contains a list of IncSwitch
-type IncSwitchList struct {
+// P4ProgramList contains a list of P4Program
+type P4ProgramList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []IncSwitch `json:"items"`
+	Items           []P4Program `json:"items"`
 }
 
 func init() {
-	SchemeBuilder.Register(&IncSwitch{}, &IncSwitchList{})
+	SchemeBuilder.Register(&P4Program{}, &P4ProgramList{})
 }

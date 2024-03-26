@@ -8,7 +8,9 @@ import (
 	sets "github.com/hashicorp/go-set"
 )
 
-func Bfs(G model.TopologyGraph, source model.Device) map[model.DeviceName]model.Device {
+type ParentsMap = map[model.DeviceName]model.Device
+
+func Bfs(G model.TopologyGraph, source model.Device) ParentsMap {
 	visited := sets.New[string](0)
 	queue := deques.New[model.Device]()
 	queue.PushBack(source)
