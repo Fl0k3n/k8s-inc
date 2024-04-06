@@ -6,11 +6,17 @@ profiles:
   - schedulerName: default-scheduler
   - schedulerName: internal-telemetry
     plugins:
+      preScore:
+        enabled:
+          - name: InternalTelemetry
       score:
         enabled:
           - name: InternalTelemetry
         disabled:
           - name: "*"
-      filter:
+      reserve:
+        enabled:
+          - name: InternalTelemetry
+      postBind:
         enabled:
           - name: InternalTelemetry

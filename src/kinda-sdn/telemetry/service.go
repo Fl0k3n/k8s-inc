@@ -16,7 +16,7 @@ type DeviceProvider = func(model.DeviceName) device.IncSwitch
 
 const TELEMETRY_MTU = 1500
 
-const PROGRAM_INTERFACE = "telemetry"
+const PROGRAM_INTERFACE = "inc.kntp.com/v1alpha1/telemetry"
 
 type TelemetryService struct {
 	entityMapLock sync.Mutex

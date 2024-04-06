@@ -3,9 +3,17 @@ apiVersion: rbac.authorization.k8s.io/v1
 metadata:
   name: system:kube-scheduler:plugins
 rules:
-  - apiGroups: ["inc.kntp.com"]
-    resources: ["topologies", "incswitches"]
-    verbs: ["get", "list", "watch"]
+  - apiGroups:
+      - "inc.kntp.com"
+    resources:
+      - topologies
+      - incswitches
+      - p4programs
+      - internalinnetworktelemetrydeployments
+    verbs:
+      - get
+      - list
+      - watch
 ---
 kind: ClusterRoleBinding
 apiVersion: rbac.authorization.k8s.io/v1

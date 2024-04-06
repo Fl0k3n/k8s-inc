@@ -19,8 +19,7 @@ install:
 .PHONY: all
 all: install
 	kubectl apply -f sdn-shim/config/example/shim.yaml
-	sleep 1
-	kubectl apply -f inc-operator/config/example/eintdepl.yaml
+	#kubectl apply -f inc-operator/config/example/eintdepl.yaml
 	
 .PHONY: clean
 clean:

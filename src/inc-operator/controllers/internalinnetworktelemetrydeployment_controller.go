@@ -32,7 +32,7 @@ import (
 )
 
 const INTERNAL_TELEMETRY_SCHEDULER_NAME = "internal-telemetry"
-const INTERNAL_TELEMETRY_POD_DEPLOYMENT_OWNER_LABEL = "inc.kntp.com/owned-by-iintdepl"
+const INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL = "inc.kntp.com/owned-by-iintdepl"
 const INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL = "inc.kntp.com/part-of-deployment"
 
 // InternalInNetworkTelemetryDeploymentReconciler reconciles a InternalInNetworkTelemetryDeployment object
@@ -75,7 +75,7 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeployment(
 
 		templateCopy := deploymentTemplate.Template.DeepCopy()
 		templateCopy.Template.Spec.SchedulerName = INTERNAL_TELEMETRY_SCHEDULER_NAME
-		templateCopy.Template.Labels[INTERNAL_TELEMETRY_POD_DEPLOYMENT_OWNER_LABEL] = intdepl.Name
+		templateCopy.Template.Labels[INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL] = intdepl.Name
 		templateCopy.Template.Labels[INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL] = deploymentTemplate.Name
 		deployment = &appsv1.Deployment{
 			ObjectMeta: metav1.ObjectMeta{

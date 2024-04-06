@@ -12,10 +12,8 @@ Assuming that kind is used, run `make install`, this will copy docker image to c
 
 ## Development
 
-Development of plugins should be perfomed in forked `scheduler-plugins` repo. To rebuild and reinstall scheduler in running kind cluster run `make all`.
+Development of plugins should be perfomed in forked `scheduler-plugins` repo. To rebuild and reinstall scheduler in a running kind cluster run `make all`.
 
 ## Testing
 
 The configuration file `config/kube-scheduler.yaml` uses multiple scheduling profiles, to schedule workloads using selected profile set pod `spec.schedulerName: <profile name>`, without that the default profile without any extra plugins (except the built-in ones) is used.
-
-dlv attach --listen=:40000 --headless=true --api-version=2 --accept-multiclient -- continue 1
