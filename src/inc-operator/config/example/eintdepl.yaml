@@ -9,7 +9,7 @@ spec:
     serviceName: receiversvc
     serviceNamespace: default
     nodeNames:
-      - test-cluster-worker
+      - test-cluster-worker3
   monitoringPolicy: all
   requireAtLeastIntDevices: "3"
   deploymentTemplate:
@@ -22,6 +22,7 @@ spec:
         labels:
           app: example
       spec:
+        terminationGracePeriodSeconds: 0
         containers:
           - name: receiver
             image: flok3n/receiver_tcp:1.0.0

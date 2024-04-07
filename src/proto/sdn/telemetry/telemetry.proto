@@ -9,17 +9,16 @@ service TelemetryService {
 }
 
 message EnableTelemetryRequest {
-    string programName = 1;
-    string collectionId = 2;
-    string collectorNodeName = 3;
-    int32 collectorPort = 4;
+    string collectionId = 1;
+    string collectorNodeName = 2;
+    int32 collectorPort = 3;
     oneof sources {
-        RawTelemetryEntities rawSources = 5;
-        TunneledTelemetryEntities tunneledSources = 6;
+        RawTelemetryEntities rawSources = 4;
+        TunneledTelemetryEntities tunneledSources = 5;
     }
     oneof targets {
-        RawTelemetryEntities rawTargets = 7;
-        TunneledTelemetryEntities tunneledTargets = 8;
+        RawTelemetryEntities rawTargets = 6;
+        TunneledTelemetryEntities tunneledTargets = 7;
     }
 }
 

@@ -258,3 +258,19 @@ catalog-build: opm ## Build a catalog image.
 .PHONY: catalog-push
 catalog-push: ## Push a catalog image.
 	$(MAKE) docker-push IMG=$(CATALOG_IMG)
+
+# -------------- NOT GENERATED
+
+.PHONY: start-shim
+start-shim:
+	kubectl apply -f config/example/shim.yaml
+	go build .
+	./sdn-shim
+
+.PHONY: clean-shim
+clean-shim:
+	kubectl delete -f config/example/shim.yaml
+	kubectl delete topologies --all
+	kubectl delete incswitches --all
+	kubectl delete p4programs --all
+	

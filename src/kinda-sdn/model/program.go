@@ -1,5 +1,7 @@
 package model
 
+import "slices"
+
 type P4Artifacts struct {
 	Arch IncSwitchArch
 	P4InfoPath string
@@ -27,4 +29,8 @@ func (p *P4ProgramDetails) GetArtifactsFor(arch IncSwitchArch) (P4Artifacts, boo
 		}
 	}
 	return P4Artifacts{}, false
+}
+
+func (p *P4ProgramDetails) Implements(iface string) bool {
+	return slices.Contains(p.ImplementedInterfaces, iface)
 }

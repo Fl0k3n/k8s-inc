@@ -2,4 +2,5 @@
 
 kubectl delete -f config/example/intdepl.yaml
 kubectl delete deployments --all
+kubectl delete InternalInNetworkTelemetryEndpoints --all
 

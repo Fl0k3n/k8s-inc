@@ -11,7 +11,7 @@ func V3_grpc_topo() *model.Topology {
 		BaseDevice: model.BaseDevice{
 			Name: "internet",
 			Links: []*model.Link{
-				model.NewLink("r4", "", "", -1),
+				model.NewLink("r4", "00:00:0a:00:0f:02", "10.10.7.2", 24),
 			},
 		},
 	}

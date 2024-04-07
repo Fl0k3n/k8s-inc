@@ -1,7 +1,7 @@
 apiVersion: inc.kntp.com/v1alpha1
 kind: InternalInNetworkTelemetryDeployment
 metadata:
-  name: eintdepl
+  name: intdepl
 spec:
   requiredProgram: telemetry
   deployments:
@@ -10,15 +10,16 @@ spec:
         replicas: 1
         selector:
           matchLabels:
-            app: example
+            app: rcv
         template:
           metadata:
             labels:
-              app: example
+              app: rcv
           spec:
+            terminationGracePeriodSeconds: 0
             containers:
               - name: receiver
-                image: flok3n/receiver_tcp:1.0.0
+                image: flok3n/receiver_tcp:1.0.3
                 command: ["python3", "/receiver_tcp.py", "8959"]
                 ports:
                   - containerPort: 8959
@@ -27,15 +28,33 @@ spec:
         replicas: 1
         selector:
           matchLabels:
-            app: example
+            app: snd
         template:
           metadata:
             labels:
-              app: example
+              app: snd
           spec:
+            terminationGracePeriodSeconds: 0
             containers:
-              - name: receiver
-                image: flok3n/receiver_tcp:1.0.0
-                command: ["python3", "/receiver_tcp.py", "8959"]
-                ports:
-                  - containerPort: 8959
+              - name: sender
+                image: flok3n/sender_tcp:1.0.3
+                imagePullPolicy: Always
+                command:
+                  [
+                    "python3",
+                    "/sender_tcp.py",
+                    "tcp-recv.default.svc.cluster.local",
+                    "8959",
+                  ]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tcp-recv
+spec:
+  selector:
+    app: rcv
+  ports:
+    - protocol: TCP
+      port: 8959
+      targetPort: 8959

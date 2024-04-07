@@ -27,3 +27,7 @@ func IngressInfoChanged(desired v1alpha1.IngressInfo, actual *v1alpha1.IngressIn
 func MonitoringPolicyChanged(desired v1alpha1.MonitoringPolicy, actual *v1alpha1.MonitoringPolicy) bool {
 	return actual == nil || desired != *actual
 }
+
+func BuildInternalCollectionName(baseName string, sourceDeplName string, targetDeplName string) string {
+	return fmt.Sprintf("%s-%s-%s", baseName, sourceDeplName, targetDeplName)
+}

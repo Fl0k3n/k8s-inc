@@ -74,12 +74,12 @@ func getDefaultTelemetryProgramDetails() *model.P4ProgramDetails {
 }
 
 func main() {
+	// topo := generated.V3_grpc_topo()
 	topo := generated.V4_gRpc_topo()
 	// updateNames(topo)
-	telemetryService := telemetry.NewService()
-
 	defaultProgram := getDefaultTelemetryProgramDetails()
 	programRegistry := programs.NewRegistry()
+	telemetryService := telemetry.NewService(programRegistry)
 	programRegistry.Register(*defaultProgram, telemetryService)
 
 	kindaSdn := controller.NewKindaSdn(topo, programRegistry, map[string][]connector.RawTableEntry{}, telemetryService)

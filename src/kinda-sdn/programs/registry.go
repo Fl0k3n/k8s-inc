@@ -13,6 +13,7 @@ type P4ProgramRegistry interface {
 	Lookup(programName string) (details model.P4ProgramDetails, ok bool)
 	MustLookupDetails(programName string) model.P4ProgramDetails
 	MustFindDelegate(programName string) P4Delegate
+	Implements(programName string, programInterface string) bool
 }
 
 type registeredProgram struct {
@@ -58,4 +59,12 @@ func (r *InMemoryP4ProgramRegistry) MustFindDelegate(programName string) P4Deleg
 		return res.(*registeredProgram).delegate
 	}
 	panic(fmt.Errorf("couldn't find delegate for program: %s", programName))
+}
+
+func (r *InMemoryP4ProgramRegistry) Implements(programName string, programInterface string) bool {
+	program, ok := r.registeredPrograms.Load(programName)
+	if !ok {
+		return false
+	}
+	return program.(*registeredProgram).details.Implements(programInterface)
 }

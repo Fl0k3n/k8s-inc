@@ -10,11 +10,20 @@ copy-crds-to-sched:
 	rm $(SCHED_SHIM_CRD_DIR)/*
 	cp ./sdn-shim/api/v1alpha1/* $(SCHED_SHIM_CRD_DIR)
 
+.PHONY: start-shim
+start-shim:
+	make --directory ./sdn-shim start-shim
+
+.PHONY: clean-shim
+clean-shim:
+	make --directory ./sdn-shim clean-shim
+
 .PHONY: install
 install:
 	make --directory ./sdn-shim generate manifests install
 	make --directory ./inc-operator generate manifests install
 	make copy-crds-to-sched
+	make --directory ./sched install-debug
 
 .PHONY: all
 all: install

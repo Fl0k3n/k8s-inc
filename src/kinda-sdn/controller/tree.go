@@ -36,8 +36,8 @@ func (k *KindaSdn) createDirectForwardEntries(incSwitch *model.IncSwitch, G mode
 	res := []connector.RawTableEntry{}
 	for _, link := range incSwitch.Links {
 		peerPort := incSwitch.MustGetPortNumberTo(link.To) + 1
-		peerMac := G[link.To].MustGetLinkTo(incSwitch.Name).MacAddr
-		entry := k.p4Delegate(incSwitch).GetForwardEntry(maskIp(link.Ipv4, 32), link.MacAddr, peerMac, peerPort)
+		peerLink := G[link.To].MustGetLinkTo(incSwitch.Name)
+		entry := k.p4Delegate(incSwitch).GetForwardEntry(maskIp(peerLink.Ipv4, 32), link.MacAddr, peerLink.MacAddr, peerPort)
 		res = append(res, entry)
 	}
 	return res

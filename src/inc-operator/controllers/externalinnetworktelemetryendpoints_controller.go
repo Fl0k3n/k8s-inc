@@ -192,7 +192,6 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcilePodTelemetry(
 			targets = targetEntities
 		}
 		req := &pbt.EnableTelemetryRequest{
-			ProgramName: endpoints.Spec.ProgramName,
 			CollectionId: utils.BuildCollectionName(endpoints.Name, mode),
 			CollectorNodeName: endpoints.Spec.CollectorNodeName,
 			CollectorPort: 6000, // TODO
@@ -300,7 +299,6 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetr
 			targets = externalDeviceEntities
 		}
 		req := &pbt.EnableTelemetryRequest{
-			ProgramName: endpoints.Spec.ProgramName,
 			CollectionId: utils.BuildCollectionName(endpoints.Name, mode),
 			CollectorNodeName: endpoints.Spec.CollectorNodeName,
 			CollectorPort: 6000, // TODO
@@ -391,7 +389,7 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) Reconcile(ctx context.Co
 		log.Error(err, "Failed to load topology")
 		return ctrl.Result{}, err
 	}
-
+	_ = topo
 	if continueReconciliation, res, err := r.reconcileIngressTelemetry(ctx, endpoints, topo, shim); !continueReconciliation {
 		return res, err	
 	}

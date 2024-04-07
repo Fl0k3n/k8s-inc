@@ -8,6 +8,7 @@ import (
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/device"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	"github.com/Fl0k3n/k8s-inc/kinda-sdn/programs"
 	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 )
@@ -21,13 +22,15 @@ const PROGRAM_INTERFACE = "inc.kntp.com/v1alpha1/telemetry"
 type TelemetryService struct {
 	entityMapLock sync.Mutex
 	entityLocks map[string]*sync.Mutex
+	registry programs.P4ProgramRegistry
 	transitCounters sync.Map // key = deviceName, val = counter of transit requests
 }
 
-func NewService() *TelemetryService {
+func NewService(registry programs.P4ProgramRegistry) *TelemetryService {
 	return &TelemetryService{
 		entityMapLock: sync.Mutex{},
 		entityLocks: make(map[string]*sync.Mutex),
+		registry: registry,
 		transitCounters: sync.Map{},
 	}
 }
@@ -216,15 +219,15 @@ func dfs(G model.TopologyGraph, target string, cur string, reversedPath *[]strin
 	}
 }
 
-func (t *TelemetryService) isCompatible(dev model.Device, programName string) bool {
-	return dev.GetType() == model.INC_SWITCH && dev.(*model.IncSwitch).InstalledProgram == programName
+func (t *TelemetryService) isCompatible(dev model.Device) bool {
+	return dev.GetType() == model.INC_SWITCH && 
+		   t.registry.Implements(dev.(*model.IncSwitch).InstalledProgram, PROGRAM_INTERFACE)
 }
 
 func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
 	G model.TopologyGraph,
 	sourceDevice string,
 	targetDevice string,
-	programName string,
 	entities *TelemetryEntities,
 ) (reversedPath []string, sourcePathIdx int, sinkPathIdx int, foundIncDeviceOnPath bool) {
 	foundIncDeviceOnPath = false
@@ -239,7 +242,7 @@ func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
 	}
 	i := len(reversedPath) - 2
 	for ; i >= 0; i-- {
-		if t.isCompatible(G[reversedPath[i]], programName) {
+		if t.isCompatible(G[reversedPath[i]]) {
 			break
 		}
 	}
@@ -248,13 +251,13 @@ func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
 	}
 	j := 1
 	for ; j <= i; j++ {
-		if t.isCompatible(G[reversedPath[j]], programName) {
+		if t.isCompatible(G[reversedPath[j]]) {
 			break
 		}
 	}
 	for k := j + 1; k < i; k++ {
 		dev := G[reversedPath[k]]
-		if t.isCompatible(dev, programName) {
+		if t.isCompatible(dev) {
 			entities.Transits[dev.GetName()] = struct{}{}
 		}
 	}
@@ -343,14 +346,13 @@ func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.EnableTeleme
 		Sinks: map[Edge]struct{}{},
 	}
 
-
 	for sourceIdx, source := range getSourceDeviceNames(req) {
 		for targetIdx, target := range getTargetDeviceNames(req) {
 			if source == target {
 				continue
 			}
 			reversedPath, sourcePathIdx, sinkPathIdx, foundIncDeviceOnPath := t.findSourceSinkEdgesAndFillTransit(
-				G, source, target, req.ProgramName, &res) 	
+				G, source, target, &res) 	
 			if !foundIncDeviceOnPath {
 				continue
 			}
