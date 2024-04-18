@@ -9,3 +9,15 @@ spec:
   programName: telemetry
 status:
   installedProgramName: telemetry
+
+
+apiVersion: inc.kntp.com/v1alpha1
+kind: IncSwitch
+metadata:
+  name: r2
+spec:
+  arch: bmv2
+  programName: cachev1
+
+
+

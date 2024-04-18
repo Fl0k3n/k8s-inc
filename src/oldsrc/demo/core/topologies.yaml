@@ -65,3 +65,36 @@ spec:
         - peerName: r4
       name: internet
       type: external
+
+
+
+apiVersion: inc.kntp.com/v1alpha1
+kind: Topology
+metadata:
+  name: cluster-topo
+spec:
+  graph:
+    - name: gateway1
+      type: external
+      links:
+        - peerName: r1
+
+    - name: r1
+      type: net-device
+      links:
+        - peerName: internet
+        - peerName: r2
+
+    - name: r2
+      type: inc-switch
+      links:
+        - peerName: r1
+        - peerName: worker1
+      
+    - name: worker1
+      type: node
+      links:
+        - peerName: r2
+      
+
+

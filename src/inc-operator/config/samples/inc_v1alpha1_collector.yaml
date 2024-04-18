@@ -1,0 +1,12 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: Collector
+metadata:
+  labels:
+    app.kubernetes.io/name: collector
+    app.kubernetes.io/instance: collector-sample
+    app.kubernetes.io/part-of: inc-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: inc-operator
+  name: collector-sample
+spec:
+  # TODO(user): Add fields here

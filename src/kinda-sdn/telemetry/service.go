@@ -73,6 +73,8 @@ func (t *TelemetryService) EnableTelemetry(
 	topo *model.Topology,
 	deviceProvider DeviceProvider,
 ) (*pbt.EnableTelemetryResponse, error) {
+	// TODO use transacion log and log every update, in case of error perform rollback
+	// TODO also consider rewriting this with dynamic programming, it could decrease the complexity to linear
 	t.entityMapLock.Lock()
 	if mapLock, ok := t.entityLocks[req.CollectionId]; ok {
 		locked := mapLock.TryLock()

@@ -17,3 +17,18 @@ spec:
     - arch: anotherArch # eg tofino
       p4Info: infoPath
       p4pipeline: pipelinePath
+
+
+apiVersion: inc.kntp.com/v1alpha1
+kind: P4Program
+metadata:
+  name: cachev1
+spec:
+  implements:
+    - inc.kntp.com/v1alpha1/telemetry
+  artifacts: 
+    - arch: bmv2
+      p4info: infoPath
+      p4pipeline: pipelinePath
+
+
