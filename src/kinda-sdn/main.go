@@ -64,6 +64,7 @@ func main() {
 	sprt := int32(7676)
 	dprt := int32(7878)
 	_, er := kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
+		IntentId: "i1",
 		CollectionId: "asd",
 		CollectorNodeName: "w5",
 		CollectorPort: 6000,
@@ -81,26 +82,26 @@ func main() {
 	if er != nil {
 		panic(er)
 	}
-	sprt += 1
-	dprt += 1
-	_, er = kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
-		CollectionId: "asd2",
-		CollectorNodeName: "w4",
-		CollectorPort: 6001,
-		Sources: &pbt.EnableTelemetryRequest_RawSources{
-			RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
-				{DeviceName: "w1", Port: &sprt},
-			},
-		}},
-		Targets: &pbt.EnableTelemetryRequest_RawTargets{
-			RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
-				{DeviceName: "w3", Port: &dprt},
-			}},
-		},
-	})
-	if er != nil {
-		panic(er)
-	}
+	// sprt += 1
+	// dprt += 1
+	// _, er = kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
+	// 	CollectionId: "asd2",
+	// 	CollectorNodeName: "w4",
+	// 	CollectorPort: 6001,
+	// 	Sources: &pbt.EnableTelemetryRequest_RawSources{
+	// 		RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+	// 			{DeviceName: "w1", Port: &sprt},
+	// 		},
+	// 	}},
+	// 	Targets: &pbt.EnableTelemetryRequest_RawTargets{
+	// 		RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+	// 			{DeviceName: "w3", Port: &dprt},
+	// 		}},
+	// 	},
+	// })
+	// if er != nil {
+	// 	panic(er)
+	// }
 
 	err := runServer(kindaSdn, "127.0.0.1:9001")
 	if err != nil {

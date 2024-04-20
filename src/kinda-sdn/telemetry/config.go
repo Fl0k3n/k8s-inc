@@ -10,6 +10,26 @@ const ANY_PORT = -1
 const ANY_IPv4 = "any"
 const FULL_TELEMETRY_KEY = 0xFF00
 
+type ConfigureSinkKey struct {
+	egressPort int
+}
+
+type ReportingKey struct {
+	collectionId int
+}
+
+type ActivateSourceKey struct {
+	ingressPort int
+}
+
+type ConfigureSourceKey struct {
+	srcAddr string
+	dstAddr string
+	srcPort int
+	dstPort int
+	tunneled bool
+}
+
 func Forward(ip string, srcMac string, dstMac string, port string) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "ingress.Forward.ipv4_lpm",
@@ -63,11 +83,11 @@ func Transit(switchId int, mtu int) connector.RawTableEntry {
 	}
 }
 
-func ActivateSource(ingressPort int) connector.RawTableEntry {
+func ActivateSource(key ActivateSourceKey) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_activate_source",
 		Match: map[string]string{
-			"standard_metadata.ingress_port": fmt.Sprintf("%d", ingressPort),
+			"standard_metadata.ingress_port": fmt.Sprintf("%d", key.ingressPort),
 		},
 		ActionName: "activate_source",
 		ActionParams: map[string]string{},
@@ -75,28 +95,27 @@ func ActivateSource(ingressPort int) connector.RawTableEntry {
 }
 
 func ConfigureSource(
-	srcAddr string, dstAddr string, srcPort int, dstPort int,
-	maxHop int, hopMetadataLen int, insCnt int, insMask int,
-	collectionId int, tunneled bool,
+	key ConfigureSourceKey,
+	maxHop int, hopMetadataLen int, insCnt int, insMask int, collectionId int,
 ) connector.RawTableEntry {
 	match := map[string]string{}
 	ipv4TableName := "ipv4"
 	sourceTableName := "tb_int_source"
-	if tunneled {
+	if key.tunneled {
 		ipv4TableName = "nested_ipv4"
 		sourceTableName = "tb_int_source_tunneled"
 	}
-	if srcAddr != ANY_IPv4 {
-		match[fmt.Sprintf("hdr.%s.srcAddr", ipv4TableName)] = srcAddr
+	if key.srcAddr != ANY_IPv4 {
+		match[fmt.Sprintf("hdr.%s.srcAddr", ipv4TableName)] = key.srcAddr
 	}
-	if dstAddr != ANY_IPv4 {
-		match[fmt.Sprintf("hdr.%s.dstAddr", ipv4TableName)] = dstAddr
+	if key.dstAddr != ANY_IPv4 {
+		match[fmt.Sprintf("hdr.%s.dstAddr", ipv4TableName)] = key.dstAddr
 	}
-	if srcPort != ANY_PORT {
-		match["meta.layer34_metadata.l4_src"] = ExactPortTernary(srcPort)
+	if key.srcPort != ANY_PORT {
+		match["meta.layer34_metadata.l4_src"] = ExactPortTernary(key.srcPort)
 	}
-	if dstPort != ANY_PORT {
-		match["meta.layer34_metadata.l4_dst"] = ExactPortTernary(dstPort)
+	if key.dstPort != ANY_PORT {
+		match["meta.layer34_metadata.l4_dst"] = ExactPortTernary(key.dstPort)
 	}
 	return connector.RawTableEntry{
 		TableName: sourceTableName,
@@ -120,11 +139,11 @@ func ExactPortTernary(port int) string {
 	return fmt.Sprintf("%d&&&0xFFFF", port)
 }
 
-func ConfigureSink(egressPort int, sinkReportingPort int) connector.RawTableEntry {
+func ConfigureSink(key ConfigureSinkKey, sinkReportingPort int) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_int_sink",
 		Match: map[string]string{
-			"standard_metadata.egress_spec": fmt.Sprintf("%d", egressPort),
+			"standard_metadata.egress_spec": fmt.Sprintf("%d", key.egressPort),
 		},
 		ActionName: "configure_sink",
 		ActionParams: map[string]string{
@@ -133,13 +152,15 @@ func ConfigureSink(egressPort int, sinkReportingPort int) connector.RawTableEntr
 	}
 }
 
-func Reporting(srcMac string, srcIp string,
-	collectorMac string, collectorIp string, collectorUdpPort int, collectionId int,
+func Reporting(
+	key ReportingKey,
+	srcMac string, srcIp string,
+	collectorMac string, collectorIp string, collectorUdpPort int,
 ) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_int_reporting",
 		Match: map[string]string{
-			"hdr.int_header.collection_id": fmt.Sprintf("%d", collectionId),
+			"hdr.int_header.collection_id": fmt.Sprintf("%d", key.collectionId),
 		},
 		ActionName: "send_report",
 		ActionParams: map[string]string{

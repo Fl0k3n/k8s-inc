@@ -28,6 +28,10 @@ type TelemetryEntities struct {
 	Sinks map[Edge]struct{}
 }
 
+func (t *TelemetryEntities) IsEmpty() bool {
+	return len(t.Sources) == 0 && len(t.Transits) == 0 && len(t.Sinks) == 0
+}
+
 func newTelemetryEntities() *TelemetryEntities {
 	return &TelemetryEntities{
 		Sources: map[Edge][]TelemetrySourceConfig{},
@@ -104,13 +108,12 @@ func getSwitchIds(topo *model.Topology) map[string]int {
 	return res
 }
 
-
 func computeDifferences(
 	oldEntities *TelemetryEntities,
 	newEntities *TelemetryEntities,
-) (removed *TelemetryEntities, added *TelemetryEntities) {
-	removed = newTelemetryEntities()
+) (added *TelemetryEntities, removed *TelemetryEntities) {
 	added = newTelemetryEntities()
+	removed = newTelemetryEntities()
 
 	for sourceEdge, oldConfs := range oldEntities.Sources {
 		if newConfs, ok := newEntities.Sources[sourceEdge]; !ok {

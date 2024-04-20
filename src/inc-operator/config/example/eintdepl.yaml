@@ -9,7 +9,7 @@ spec:
     serviceName: receiversvc
     serviceNamespace: default
     nodeNames:
-      - tree-worker2
+      - { w3 }
   monitoringPolicy: all
   requireAtLeastIntDevices: "3"
   deploymentTemplate:

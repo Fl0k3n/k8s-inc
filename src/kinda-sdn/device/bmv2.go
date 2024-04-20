@@ -2,6 +2,7 @@ package device
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
@@ -15,12 +16,14 @@ const WRITE_ENTRY_TIMEOUT = 1 * time.Second
 type Bmv2Manager struct {
 	grpcAddr string
 	conn *connector.P4RuntimeConnector
+	connectorLock sync.Mutex
 }
 
 func NewBmv2Manager(grpcAddr string) *Bmv2Manager {
 	return &Bmv2Manager{
 		grpcAddr: grpcAddr,
 		conn: nil,
+		connectorLock: sync.Mutex{},
 	}
 }
 
@@ -29,11 +32,23 @@ func (b *Bmv2Manager) GetArch() model.IncSwitchArch {
 }
 
 func (b *Bmv2Manager) WriteEntry(ctx context.Context, entry connector.RawTableEntry) error {
+	b.connectorLock.Lock()
+	defer b.connectorLock.Unlock()
 	convertedEntry, err := b.convertEntry(&entry)
 	if err != nil {
 		return err
 	}
 	return b.conn.WriteMatchActionEntry(ctx, convertedEntry)
+}
+
+func (b *Bmv2Manager) DeleteEntry(ctx context.Context, entry connector.RawTableEntry) error {
+	b.connectorLock.Lock()
+	defer b.connectorLock.Unlock()
+	convertedEntry, err := b.convertEntry(&entry)
+	if err != nil {
+		return err
+	}
+	return b.conn.DeleteMatchActionEntry(ctx, convertedEntry)
 }
 
 func (b *Bmv2Manager) convertEntry(entry *connector.RawTableEntry) (connector.TableEntry, error) {

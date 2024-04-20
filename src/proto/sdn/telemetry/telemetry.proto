@@ -61,8 +61,9 @@ message DisableTelemetryRequest {
     string intentId = 1;
 }
 
+
 message DisableTelemetryResponse {
-    TelemetryState telemetryState = 1;
+    bool shouldRetryLater = 1;
 }
 
 // EnableReq: (also sent on updating)

@@ -4,7 +4,7 @@ metadata:
   name: collector
 spec:
   podSpec:
-    nodeName: tree-worker4
+    nodeName: { w5 }
     containers:
       - name: nodeapp
         image: flok3n/int-collector:1.0.2

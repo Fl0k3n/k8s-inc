@@ -51,8 +51,8 @@ func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
 	sourceDevice string,
 	targetDevice string,
 	entities *TelemetryEntities,
-) (reversedPath []string, sourcePathIdx int, sinkPathIdx int, foundIncDeviceOnPath bool) {
-	foundIncDeviceOnPath = false
+) (reversedPath []string, sourcePathIdx int, sinkPathIdx int, foundIncDevicesOnPath bool) {
+	foundIncDevicesOnPath = false
 	if sourceDevice == targetDevice {
 		return
 	}
@@ -75,13 +75,16 @@ func (t *TelemetryService) findSourceSinkEdgesAndFillTransit(
 			break
 		}
 	}
+	if j == i {
+		return // telemetry needs at least 2 devices to work properly
+	}
 	for k := j + 1; k < i; k++ {
 		dev := G[reversedPath[k]]
 		if t.isCompatible(dev) {
 			entities.Transits[dev.GetName()] = struct{}{}
 		}
 	}
-	foundIncDeviceOnPath = true
+	foundIncDevicesOnPath = true
 	sourcePathIdx = i
 	sinkPathIdx = j
 	return
