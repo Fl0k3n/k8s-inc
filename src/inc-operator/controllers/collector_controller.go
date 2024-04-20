@@ -162,7 +162,7 @@ func (r *CollectorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			Type: incv1alpha1.TypeAvailableCollector,
 			Status: metav1.ConditionTrue,
 			Reason: "Reconciling",
-			Message: "Daemonset pod and NodePort are running",
+			Message: "Daemonset pod and NodePort are ready",
 		})
 	} else {
 		meta.SetStatusCondition(&collector.Status.Conditions, metav1.Condition{
@@ -227,7 +227,11 @@ func (r *CollectorReconciler) createNodePortServiceForCollector(collector *incv1
 func labelsForCollector(collector *incv1alpha1.Collector) map[string]string {
 	var imageTag string
 	image := collector.Spec.PodSpec.Containers[0].Image
-	imageTag = strings.Split(image, ":")[1]
+	imageAndTag := strings.Split(image, ":")
+	imageTag = "0.0.0"
+	if len(imageAndTag) > 1 {
+		imageTag = imageAndTag[1]
+	}
 	return map[string]string{
 		"app.kubernetes.io/name": "int-collector",
 		"app.kubernetes.io/instance":   collector.Name,

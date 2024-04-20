@@ -71,6 +71,10 @@ func IsInvalidEntryError(err error) bool {
 	return checkBasedOnCode(err, grpc_codes.InvalidArgument)
 }
 
+func IsEntryNotFoundError(err error) bool {
+	return checkBasedOnCode(err, grpc_codes.NotFound)
+}
+
 func AsRpcError(err error) (re RpcError, ok bool) {
 	p4e, ok := unwrapP4Error(err)
 	if !ok {

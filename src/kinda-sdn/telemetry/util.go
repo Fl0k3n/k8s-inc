@@ -28,6 +28,14 @@ type TelemetryEntities struct {
 	Sinks map[Edge]struct{}
 }
 
+func newTelemetryEntities() *TelemetryEntities {
+	return &TelemetryEntities{
+		Sources: map[Edge][]TelemetrySourceConfig{},
+		Transits: map[string]struct{}{},
+		Sinks: map[Edge]struct{}{},
+	}
+}
+
 func getSourceDeviceNames(req *pbt.EnableTelemetryRequest) []string {
 	res := []string{}
 	switch s := req.Sources.(type) {
@@ -83,7 +91,7 @@ func getTargetDetails(req *pbt.EnableTelemetryRequest, deviceName string, target
 	}
 }
 
-// TODO, they are needed for telemetry bookkeeping (mapping raport headers to switches)
+// TODO: they are needed for telemetry bookkeeping (mapping raport headers to switches)
 func getSwitchIds(topo *model.Topology) map[string]int {
 	res := map[string]int{}
 	counter := 0
@@ -94,4 +102,80 @@ func getSwitchIds(topo *model.Topology) map[string]int {
 		}
 	}
 	return res
+}
+
+
+func computeDifferences(
+	oldEntities *TelemetryEntities,
+	newEntities *TelemetryEntities,
+) (removed *TelemetryEntities, added *TelemetryEntities) {
+	removed = newTelemetryEntities()
+	added = newTelemetryEntities()
+
+	for sourceEdge, oldConfs := range oldEntities.Sources {
+		if newConfs, ok := newEntities.Sources[sourceEdge]; !ok {
+			removed.Sources[sourceEdge] = oldConfs
+		} else {
+			addedConfs := []TelemetrySourceConfig{}
+			removedConfs := []TelemetrySourceConfig{}
+			for _, oldConf := range oldConfs {
+				found := false
+				for _, newConf := range newConfs {
+					if oldConf == newConf {
+						found = true
+						break	
+					}
+				}
+				if !found {
+					removedConfs = append(removedConfs, oldConf)
+				}
+			}
+			for _, newConf := range newConfs {
+				found := false
+				for _, oldConf := range oldConfs {
+					if oldConf == newConf {
+						found = true
+						break	
+					}
+				}
+				if !found {
+					addedConfs = append(addedConfs, newConf)
+				}
+			}
+			if len(addedConfs) > 0 {
+				added.Sources[sourceEdge] = addedConfs
+			}
+			if len(removedConfs) > 0 {
+				removed.Sources[sourceEdge] = removedConfs
+			}
+		}
+	}
+	for sourceEdge, conf := range newEntities.Sources {
+		if _, ok := oldEntities.Sources[sourceEdge]; !ok {
+			added.Sources[sourceEdge] = conf
+		}
+	}
+
+	for transit := range oldEntities.Transits {
+		if _, ok := newEntities.Transits[transit]; !ok {
+			removed.Transits[transit] = struct{}{}
+		}
+	}
+	for transit := range newEntities.Transits {
+		if _, ok := oldEntities.Transits[transit]; !ok {
+			added.Transits[transit] = struct{}{}
+		}
+	}
+	
+	for sink := range oldEntities.Sinks {
+		if _, ok := newEntities.Sinks[sink]; !ok {
+			removed.Sinks[sink] = struct{}{}
+		}
+	}
+	for sink := range newEntities.Sinks {
+		if _, ok := oldEntities.Sinks[sink]; !ok {
+			added.Sinks[sink] = struct{}{}
+		}
+	}
+	return
 }

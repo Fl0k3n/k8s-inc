@@ -76,7 +76,8 @@ func ActivateSource(ingressPort int) connector.RawTableEntry {
 
 func ConfigureSource(
 	srcAddr string, dstAddr string, srcPort int, dstPort int,
-	maxHop int, hopMetadataLen int, insCnt int, insMask int, tunneled bool,
+	maxHop int, hopMetadataLen int, insCnt int, insMask int,
+	collectionId int, tunneled bool,
 ) connector.RawTableEntry {
 	match := map[string]string{}
 	ipv4TableName := "ipv4"
@@ -106,6 +107,7 @@ func ConfigureSource(
 			"hop_metadata_len": fmt.Sprintf("%d", hopMetadataLen),
 			"ins_cnt": fmt.Sprintf("%d", insCnt),
 			"ins_mask": fmt.Sprintf("%d", insMask),
+			"collection_id": fmt.Sprintf("%d", collectionId),
 		},
 	}
 }
@@ -131,13 +133,14 @@ func ConfigureSink(egressPort int, sinkReportingPort int) connector.RawTableEntr
 	}
 }
 
-// TODO allow having different collectors for different key, whatever that key might be
 func Reporting(srcMac string, srcIp string,
-	collectorMac string, collectorIp string, collectorUdpPort int,
+	collectorMac string, collectorIp string, collectorUdpPort int, collectionId int,
 ) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_int_reporting",
-		Match: map[string]string{},
+		Match: map[string]string{
+			"hdr.int_header.collection_id": fmt.Sprintf("%d", collectionId),
+		},
 		ActionName: "send_report",
 		ActionParams: map[string]string{
 			"dp_mac": srcMac,

@@ -10,8 +10,11 @@ import (
 
 func (p *P4RuntimeConnector) InstallProgram(ctx context.Context, binPath string, p4infoPath string) error {
 	res, err := p.p4rtc.SetFwdPipe(ctx, binPath, p4infoPath, 0)
+	if err != nil {
+		return err
+	}
 	p.p4info = res.P4Info
-	return err
+	return nil
 }
 
 func (p *P4RuntimeConnector) UseInstalledProgram(p4infoPath string) error {

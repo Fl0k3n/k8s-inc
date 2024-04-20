@@ -57,3 +57,9 @@ func (m *KindaSdn) EnableTelemetry(ctx context.Context, req *pbt.EnableTelemetry
 		return m.bmv2Managers[dn]
 	})	
 }
+
+func (m *KindaSdn) DisableTelemetry(ctx context.Context, req *pbt.DisableTelemetryRequest) (*pbt.DisableTelemetryResponse, error) {
+	return m.telemetryService.DisableTelemetry(req, m.topo, func(dn model.DeviceName) device.IncSwitch {
+		return m.bmv2Managers[dn]
+	})	
+}

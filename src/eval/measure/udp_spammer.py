@@ -3,7 +3,7 @@ import sys
 import threading
 import time
 
-payload_size = 900
+payload_size = 940
 packets_per_second_per_address = 1000
 
 if len(sys.argv) < 2:

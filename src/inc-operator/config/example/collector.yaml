@@ -4,9 +4,18 @@ metadata:
   name: collector
 spec:
   podSpec:
-    nodeName: tree-worker1
+    nodeName: tree-worker4
     containers:
       - name: nodeapp
-        image: flok3n/int-collector:1.0.0
+        image: flok3n/int-collector:1.0.2
+        command:
+          ["python3", "/app/server.py", "-i", "6000", "-o", "/logs/reports.csv"]
         ports:
           - containerPort: 6000
+        volumeMounts:
+          - name: logs-dir
+            mountPath: /logs
+    volumes:
+      - name: logs-dir
+        hostPath:
+          path: /logs

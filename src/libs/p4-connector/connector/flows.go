@@ -12,6 +12,7 @@ import (
 	"github.com/Fl0k3n/k8s-inc/libs/p4r/util/conversion"
 
 	p4_config_v1 "github.com/p4lang/p4runtime/go/p4/config/v1"
+	p4_v1 "github.com/p4lang/p4runtime/go/p4/v1"
 )
 
 
@@ -226,7 +227,7 @@ func (p *P4RuntimeConnector) BuildMatchEntry(tableName string, rawMatchEntries m
 }
 
 
-func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, entry TableEntry) error {
+func (p *P4RuntimeConnector) mapToProtobufTableEntry(entry TableEntry) *p4_v1.TableEntry {
 	defaultPriority := int32(0)
 	for _, matchValue := range entry.Match {
 		if _, isTernary := matchValue.(*client.TernaryMatch); isTernary {
@@ -234,7 +235,7 @@ func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, entry Ta
 			break
 		}
 	}
-	pbEntry := p.p4rtc.NewTableEntry(
+	return p.p4rtc.NewTableEntry(
 		entry.TableName,
 		entry.Match,
 		p.p4rtc.NewTableActionDirect(entry.Action.Name, entry.Action.Params),
@@ -243,5 +244,13 @@ func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, entry Ta
 			IdleTimeout: 0, // no timeout
 		},
 	)
-	return p.p4rtc.InsertTableEntry(ctx, pbEntry)
+}
+
+
+func (p *P4RuntimeConnector) WriteMatchActionEntry(ctx context.Context, entry TableEntry) error {
+	return p.p4rtc.InsertTableEntry(ctx, p.mapToProtobufTableEntry(entry))
+}
+
+func (p *P4RuntimeConnector) DeleteMatchActionEntry(ctx context.Context, entry TableEntry) error {
+	return p.p4rtc.DeleteTableEntry(ctx, p.mapToProtobufTableEntry(entry))
 }

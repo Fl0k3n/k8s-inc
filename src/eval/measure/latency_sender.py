@@ -68,7 +68,8 @@ def sender():
                     msgs.pop(0)
                 latency = (rcv_time - snd_time) / 2
                 latencies.append(latency)
-                print(f'lat: {latency}s\tdropped_ish: {dropped_repeated_or_out_of_order}')
+                # print(f'lat: {latency}s\tdropped_ish: {dropped_repeated_or_out_of_order}')
+                print(f'{time.time()},{latency}', flush=True)
             except queue.Empty:
                 break
         time.sleep(float(period_millis) / 1000)

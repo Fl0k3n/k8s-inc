@@ -8,6 +8,50 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - collectors
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - collectors/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - collectors/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - daemonsets
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - daemonsets/status
+  verbs:
+  - get
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - deployments
   verbs:
   - create
@@ -246,8 +290,12 @@ rules:
   resources:
   - services
   verbs:
+  - create
+  - delete
   - get
   - list
+  - patch
+  - update
   - watch
 - apiGroups:
   - inc.kntp.com

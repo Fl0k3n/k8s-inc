@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"os/exec"
-	"strings"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/controller"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
@@ -29,33 +27,6 @@ func runServer(frontend *controller.KindaSdn, grpcAddr string) error {
 	return server.Serve(lis)
 }
 
-func updateNames(topo *model.Topology) {
-	// kubectl get nodes -l sname=w1 --no-headers 
-	nodeNamesRemap := map[model.DeviceName]model.DeviceName{}
-	for i := 0; i < len(topo.Devices); i++ {
-		dev := topo.Devices[i]
-		if dev.GetType() == model.NODE {
-			n := dev.(*model.Host)
-			cmd := exec.Command("kubectl", "get", "node", "-l", "sname=" + string(n.Name), "--no-headers")
-			out, err := cmd.Output()
-			if err != nil {
-				panic(err)
-			}
-			oldName := n.Name
-			n.Name = model.DeviceName(strings.Split(string(out), " ")[0])
-			nodeNamesRemap[oldName] = n.Name
-			topo.Devices[i] = n
-		}
-	}
-	for _, dev := range topo.Devices {
-		for _, link := range dev.GetLinks() {
-			if newName, ok := nodeNamesRemap[link.To]; ok {
-				link.To = newName
-			}
-		}
-	}
-}
-
 func getDefaultTelemetryProgramDetails() *model.P4ProgramDetails {
 	defaultProgramName := "telemetry-v5"
 	interfaces := []string{telemetry.PROGRAM_INTERFACE}	
@@ -77,7 +48,6 @@ func getDefaultTelemetryProgramDetails() *model.P4ProgramDetails {
 func main() {
 	// topo := generated.V3_grpc_topo()
 	topo := generated.Measure_gRPC_topo()
-	// updateNames(topo)
 	defaultProgram := getDefaultTelemetryProgramDetails()
 	programRegistry := programs.NewRegistry()
 	telemetryService := telemetry.NewService(programRegistry)
@@ -95,8 +65,28 @@ func main() {
 	dprt := int32(7878)
 	_, er := kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
 		CollectionId: "asd",
-		CollectorNodeName: "c1",
+		CollectorNodeName: "w5",
 		CollectorPort: 6000,
+		Sources: &pbt.EnableTelemetryRequest_RawSources{
+			RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+				{DeviceName: "w1", Port: &sprt},
+			},
+		}},
+		Targets: &pbt.EnableTelemetryRequest_RawTargets{
+			RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+				{DeviceName: "w3", Port: &dprt},
+			}},
+		},
+	})
+	if er != nil {
+		panic(er)
+	}
+	sprt += 1
+	dprt += 1
+	_, er = kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
+		CollectionId: "asd2",
+		CollectorNodeName: "w4",
+		CollectorPort: 6001,
 		Sources: &pbt.EnableTelemetryRequest_RawSources{
 			RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
 				{DeviceName: "w1", Port: &sprt},

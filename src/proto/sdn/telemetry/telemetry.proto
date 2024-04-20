@@ -6,19 +6,21 @@ package telemetry;
 
 service TelemetryService {
     rpc EnableTelemetry(EnableTelemetryRequest) returns (EnableTelemetryResponse) {}
+    rpc DisableTelemetry(DisableTelemetryRequest) returns (DisableTelemetryResponse) {}
 }
 
 message EnableTelemetryRequest {
-    string collectionId = 1;
-    string collectorNodeName = 2;
-    int32 collectorPort = 3;
+    string intentId = 1;
+    string collectionId = 2;
+    string collectorNodeName = 3;
+    int32 collectorPort = 4;
     oneof sources {
-        RawTelemetryEntities rawSources = 4;
-        TunneledTelemetryEntities tunneledSources = 5;
+        RawTelemetryEntities rawSources = 5;
+        TunneledTelemetryEntities tunneledSources = 6;
     }
     oneof targets {
-        RawTelemetryEntities rawTargets = 6;
-        TunneledTelemetryEntities tunneledTargets = 7;
+        RawTelemetryEntities rawTargets = 7;
+        TunneledTelemetryEntities tunneledTargets = 8;
     }
 }
 
@@ -53,6 +55,14 @@ enum TelemetryState {
 message EnableTelemetryResponse {
     TelemetryState telemetryState = 1;
     optional string description = 2;
+}
+
+message DisableTelemetryRequest {
+    string intentId = 1;
+}
+
+message DisableTelemetryResponse {
+    TelemetryState telemetryState = 1;
 }
 
 // EnableReq: (also sent on updating)
