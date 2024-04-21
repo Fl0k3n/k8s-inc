@@ -16,8 +16,13 @@ const (
 	PODS_TO_INGRESS     TelemetryRequestType = "pi"
 )
 
-func BuildCollectionName(baseName string, reqType TelemetryRequestType) string {
+// TODO: remember about namespaces
+func BuildIntentId(baseName string, reqType TelemetryRequestType) string {
 	return fmt.Sprintf("%s-%s", baseName, string(reqType))
+}
+
+func BuildCollectionId(baseName string) string {
+	return fmt.Sprintf("external-%s", baseName)
 }
 
 func IngressInfoChanged(desired v1alpha1.IngressInfo, actual *v1alpha1.IngressInfo) bool {
@@ -28,6 +33,21 @@ func MonitoringPolicyChanged(desired v1alpha1.MonitoringPolicy, actual *v1alpha1
 	return actual == nil || desired != *actual
 }
 
-func BuildInternalCollectionName(baseName string, sourceDeplName string, targetDeplName string) string {
+func BuildInternalIntentId(baseName string, sourceDeplName string, targetDeplName string) string {
 	return fmt.Sprintf("%s-%s-%s", baseName, sourceDeplName, targetDeplName)
+}
+
+func BuildInternalCollectionId(baseName string) string {
+	return fmt.Sprintf("internal-%s", baseName)
+}
+
+type DeploymentPair struct {First, Second string}
+
+func PairedDeployments(endpoints *v1alpha1.InternalInNetworkTelemetryEndpoints) []DeploymentPair {
+	if len(endpoints.Spec.DeploymentEndpoints) != 2 {
+		panic("expected 2 endpoints")
+	}
+	depl1 := endpoints.Spec.DeploymentEndpoints[0].DeploymentName
+	depl2 := endpoints.Spec.DeploymentEndpoints[1].DeploymentName
+	return []DeploymentPair{{depl1, depl2}, {depl2, depl1}}
 }

@@ -35,7 +35,6 @@ type NamedDeploymentSpec struct {
 type InternalInNetworkTelemetryDeploymentSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
-	RequiredProgram string `json:"requiredProgram"`
 	DeploymentTemplates []NamedDeploymentSpec `json:"deployments"`
 	CollectorRef v1.LocalObjectReference `json:"collectorRef"`
 }

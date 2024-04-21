@@ -48,6 +48,8 @@ spec:
                 type: object
                 x-kubernetes-map-type: atomic
               deployments:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
                 items:
                   properties:
                     name:
@@ -8682,14 +8684,9 @@ spec:
                   - template
                   type: object
                 type: array
-              requiredProgram:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
-                type: string
             required:
             - collectorRef
             - deployments
-            - requiredProgram
             type: object
           status:
             description: InternalInNetworkTelemetryDeploymentStatus defines the observed

@@ -191,24 +191,24 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcilePodTelemetry(
 			sources = ingressEntities
 			targets = targetEntities
 		}
-		req := &pbt.EnableTelemetryRequest{
-			CollectionId: utils.BuildCollectionName(endpoints.Name, mode),
+		req := &pbt.ConfigureTelemetryRequest{
+			CollectionId: utils.BuildIntentId(endpoints.Name, mode),
 			CollectorNodeName: endpoints.Spec.CollectorNodeName,
 			CollectorPort: 6000, // TODO
-			Sources: &pbt.EnableTelemetryRequest_TunneledSources{
+			Sources: &pbt.ConfigureTelemetryRequest_TunneledSources{
 				TunneledSources: &pbt.TunneledTelemetryEntities{
 					DeviceNamesWithEntities: sources,	
 				},
 			},
-			Targets: &pbt.EnableTelemetryRequest_TunneledTargets{
+			Targets: &pbt.ConfigureTelemetryRequest_TunneledTargets{
 				TunneledTargets: &pbt.TunneledTelemetryEntities{
 					DeviceNamesWithEntities: targets,	
 				},
 			},
 		}
-		var resp *pbt.EnableTelemetryResponse
+		var resp *pbt.ConfigureTelemetryResponse
 		err = r.withTelemetryClient(shim.Spec.SdnConfig.SdnGrpcAddr, func(tsc pbt.TelemetryServiceClient) error {
-			response, er := tsc.EnableTelemetry(ctx, req)
+			response, er := tsc.ConfigureTelemetry(ctx, req)
 			if er != nil {
 				return er
 			}
@@ -298,24 +298,25 @@ func (r *ExternalInNetworkTelemetryEndpointsReconciler) reconcileIngressTelemetr
 			sources = ingressDeviceEntities
 			targets = externalDeviceEntities
 		}
-		req := &pbt.EnableTelemetryRequest{
-			CollectionId: utils.BuildCollectionName(endpoints.Name, mode),
+		req := &pbt.ConfigureTelemetryRequest{
+			IntentId: utils.BuildIntentId(endpoints.Name, mode),
+			CollectionId: utils.BuildCollectionId(endpoints.Name),
 			CollectorNodeName: endpoints.Spec.CollectorNodeName,
 			CollectorPort: 6000, // TODO
-			Sources: &pbt.EnableTelemetryRequest_RawSources{
+			Sources: &pbt.ConfigureTelemetryRequest_RawSources{
 				RawSources: &pbt.RawTelemetryEntities{
 					Entities: sources,
 				},
 			},
-			Targets: &pbt.EnableTelemetryRequest_RawTargets{
+			Targets: &pbt.ConfigureTelemetryRequest_RawTargets{
 				RawTargets: &pbt.RawTelemetryEntities{
 					Entities: targets,
 				},
 			},
 		}
-		var resp *pbt.EnableTelemetryResponse
+		var resp *pbt.ConfigureTelemetryResponse
 		err = r.withTelemetryClient(shim.Spec.SdnConfig.SdnGrpcAddr, func(tsc pbt.TelemetryServiceClient) error {
-			response, er := tsc.EnableTelemetry(ctx, req)
+			response, er := tsc.ConfigureTelemetry(ctx, req)
 			if er != nil {
 				return er
 			}

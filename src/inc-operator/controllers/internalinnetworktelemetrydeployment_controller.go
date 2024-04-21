@@ -22,7 +22,6 @@ import (
 	"fmt"
 
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1"
-	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
 	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -30,19 +29,16 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
-	"sigs.k8s.io/controller-runtime/pkg/builder"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
-	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
-	"sigs.k8s.io/controller-runtime/pkg/predicate"
-	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
 const INTERNAL_TELEMETRY_SCHEDULER_NAME = "internal-telemetry"
 const INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL = "inc.kntp.com/owned-by-iintdepl"
 const INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL = "inc.kntp.com/part-of-deployment"
+
+const INTERNAL_TELEMETRY_ENDPOINTS_FINALIZER = "inc.kntp.com/iint-finalizer"
 
 // InternalInNetworkTelemetryDeploymentReconciler reconciles a InternalInNetworkTelemetryDeployment object
 type InternalInNetworkTelemetryDeploymentReconciler struct {
@@ -57,65 +53,17 @@ type InternalInNetworkTelemetryDeploymentReconciler struct {
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=deployments/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=deployments/finalizers,verbs=update
 
-func (r *InternalInNetworkTelemetryDeploymentReconciler) getDeploymentFullName(
-	intdeplName string,
-	partialDeploymentName string,
-) string {
-	return fmt.Sprintf("%s-%s", intdeplName, partialDeploymentName)
-}
-
-func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeployment(
-	ctx context.Context,
-	intdepl *incv1alpha1.InternalInNetworkTelemetryDeployment,
-	deployTemplateIdx int,
-) (deployment *appsv1.Deployment, continueReconciliation bool, erro error) {
-	log := log.FromContext(ctx)
-	deployment = &appsv1.Deployment{}
-	continueReconciliation = false
-	deploymentTemplate := intdepl.Spec.DeploymentTemplates[deployTemplateIdx]
-
-	resourceName := r.getDeploymentFullName(intdepl.Name, deploymentTemplate.Name)
-	resourceKey := types.NamespacedName{Name: resourceName, Namespace: intdepl.ObjectMeta.Namespace} 
-	if err := r.Get(ctx, resourceKey, deployment); err != nil {
-		if client.IgnoreNotFound(err) != nil {
-			log.Error(err, "failed to fetch deployment")	
-			return nil, false, err
-		}
-
-		templateCopy := deploymentTemplate.Template.DeepCopy()
-		templateCopy.Template.Spec.SchedulerName = INTERNAL_TELEMETRY_SCHEDULER_NAME
-		templateCopy.Template.Labels[INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL] = intdepl.Name
-		templateCopy.Template.Labels[INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL] = deploymentTemplate.Name
-		deployment = &appsv1.Deployment{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: resourceName,
-				Namespace: intdepl.Namespace,
-			},
-			Spec: *templateCopy,
-		}
-
-		if err := r.Create(ctx, deployment); err != nil {
-			log.Error(err, "failed to create deployment")
-			return nil, false, err
-		}
-		return deployment, false, nil
-	}
-
-	// TODO check if spec matches
-
-	return deployment, true, nil
-}
 
 func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeploymentEndpointEntries(
 	ctx context.Context,
-	pods []*v1.Pod, 
+	pods []v1.Pod, 
 	endpointEntries []incv1alpha1.InternalInNetworkTelemetryEndpointsEntry,
 ) (_ []incv1alpha1.InternalInNetworkTelemetryEndpointsEntry, changed bool) {
 	log := log.FromContext(ctx)	
 	changed = false
 	validEntries := []incv1alpha1.InternalInNetworkTelemetryEndpointsEntry{}
 	// check if for each managed endpoint pod exists, if not delete it
-	for _, ep := range endpointEntries {
+	for i, ep := range endpointEntries {
 		found := false
 		for _, pod := range pods {
 			if pod.UID == ep.PodReference.UID {
@@ -126,18 +74,18 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeploymentEndp
 		if !found {
 			if ep.EntryStatus != incv1alpha1.EP_TERMINATING {
 				changed = true
-				ep.EntryStatus = incv1alpha1.EP_TERMINATING
+				endpointEntries[i].EntryStatus = incv1alpha1.EP_TERMINATING
 			}
-			validEntries = append(validEntries, ep)
+			validEntries = append(validEntries, endpointEntries[i])
 		}
 	}
 
 	// check if for each managed pod there exists managed endpoint, if not create new
 	for _, pod := range pods {
 		var ep *incv1alpha1.InternalInNetworkTelemetryEndpointsEntry = nil
-		for _, e := range endpointEntries {
+		for i, e := range endpointEntries {
 			if e.PodReference.UID == pod.UID {
-				ep = &e
+				ep = &endpointEntries[i]
 				break
 			}
 		}
@@ -170,28 +118,11 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeploymentEndp
 
 func (r *InternalInNetworkTelemetryDeploymentReconciler) reconcileDeploymentEndpoints(
 	ctx context.Context,
-	pods *v1.PodList,
+	perDeploymentPods map[string][]v1.Pod,
 	intdepl *incv1alpha1.InternalInNetworkTelemetryDeployment,
 	managedEndpoints *incv1alpha1.InternalInNetworkTelemetryEndpoints,
 ) (ctrl.Result, bool, error) {
 	log := log.FromContext(ctx)	
-
-	perDeploymentPods := map[string][]*v1.Pod{}
-	for _, depl := range intdepl.Spec.DeploymentTemplates {
-		perDeploymentPods[depl.Name] = []*v1.Pod{}
-	}
-	for i, pod := range pods.Items {
-		if deplName, ok := pod.Labels[INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL]; ok {
-			perDeploymentPods[deplName] = append(perDeploymentPods[deplName], &pods.Items[i])
-		} else {
-			log.Info(
-				fmt.Sprintf(
-					"Found pod %s belonging to iintdepl %s without deployment label",
-					pod.Name, intdepl.Name,
-				),
-			)
-		}
-	}
 
 	reconciledEntries := make([]incv1alpha1.DeploymentEndpoints, len(managedEndpoints.Spec.DeploymentEndpoints))
 	changed := false
@@ -246,6 +177,14 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 		return ctrl.Result{}, nil
 	}
 
+	isMarkedForDeletion := intdepl.GetDeletionTimestamp() != nil
+	if isMarkedForDeletion {
+		// there should be finalizers for endpoints, when endpoints are deleted these finalizers should
+		// also be removed automatically, then this one will be deleted, no additional action neccessary
+		// TODO: set some status 
+		return ctrl.Result{}, nil
+	}
+
 	if len(intdepl.Spec.DeploymentTemplates) != 2 {
 		// TODO at validation stage
 		err := errors.New("internal INT deployment requires 2 deployment templates")
@@ -253,25 +192,41 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 		return ctrl.Result{Requeue: false}, nil
 	}
 
+	deployments := map[string]*appsv1.Deployment{}
+	someCreated := false
 	for i := range intdepl.Spec.DeploymentTemplates {
-		_, continueReconciliation, err := r.reconcileDeployment(ctx, intdepl, i)
-		if err != nil {
-			return ctrl.Result{}, err
+		deploymentTemplate := intdepl.Spec.DeploymentTemplates[i]
+		resourceKey := resourceKeyForIntdepl(intdepl, deploymentTemplate.Name)
+		deployment := &appsv1.Deployment{}
+		if err := r.Get(ctx, resourceKey, deployment); err != nil {
+			if apierrors.IsNotFound(err) {
+				deployment = createDeploymentForIntdepl(intdepl, deploymentTemplate, resourceKey)
+				if err := ctrl.SetControllerReference(intdepl, deployment, r.Scheme); err != nil {
+					log.Error(err, "failed to set controller reference to deployment")
+					return ctrl.Result{}, err
+				}
+				if err := r.Create(ctx, deployment); err != nil {
+					log.Error(err, "failed to create deployment")
+					return ctrl.Result{}, err
+				}
+				someCreated = true
+			} else {
+				log.Error(err, "failed to fetch deployment")
+				return ctrl.Result{}, err
+			}
+		} else {
+			// TODO: check if deployment wasn't changed
 		}
-		if !continueReconciliation {
-			return ctrl.Result{Requeue: true}, nil
-		}
+		deployments[deploymentTemplate.Name] = deployment
+	}
+	if someCreated {
+		return ctrl.Result{Requeue: true}, nil
 	}
 	
 	managedEndpoints := &incv1alpha1.InternalInNetworkTelemetryEndpoints{}
 	managedEndpointsKey := client.ObjectKey{Name: req.Name, Namespace: req.Namespace}
 	if err := r.Get(ctx, managedEndpointsKey, managedEndpoints); err != nil {
 		if apierrors.IsNotFound(err) {
-			collectorNodeName, err := shimutils.GetNameOfNodeWithSname(ctx, r.Client, "c1") // TODO
-			if err != nil {
-				log.Error(err, "collector")
-				return ctrl.Result{}, err
-			}
 			entries := []incv1alpha1.DeploymentEndpoints{}
 			for _, deplTemplate := range intdepl.Spec.DeploymentTemplates {
 				entries = append(entries, incv1alpha1.DeploymentEndpoints{	
@@ -286,15 +241,16 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 				},
 				Spec: incv1alpha1.InternalInNetworkTelemetryEndpointsSpec{
 					DeploymentEndpoints: entries,
-					CollectorNodeName: collectorNodeName,
+					CollectorRef: intdepl.Spec.CollectorRef,
 				},
 			}
 			if err := controllerutil.SetControllerReference(intdepl, eps, r.Scheme); err != nil {
-				log.Error(err, "Failed to set controller reference")
+				log.Error(err, "failed to set controller reference")
 				return ctrl.Result{}, err
 			}
+			controllerutil.AddFinalizer(eps, INTERNAL_TELEMETRY_ENDPOINTS_FINALIZER)
 			if err := r.Create(ctx, eps); err != nil {
-				log.Error(err, "Failed to create endpoints")
+				log.Error(err, "failed to create endpoints")
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{Requeue: true}, nil
@@ -302,43 +258,79 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 		return ctrl.Result{}, err
 	}
 
-	podSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL: intdepl.Name,
-		},
-	})
+	perDeploymentPods, err := r.loadPerDeploymentPods(ctx, deployments)
 	if err != nil {
+		log.Error(err, "Failed to load pods")
 		return ctrl.Result{}, err
 	}
-	managedPods := &v1.PodList{}
-	listOptions := &client.ListOptions{
-		LabelSelector: podSelector,
-		Namespace: req.Namespace,
-	}
-	if err := r.List(ctx, managedPods, listOptions); err != nil {
-		log.Error(err, "Failed to load pods")
-	}
 
-	if res, continueReconciliation, err := r.reconcileDeploymentEndpoints(ctx, managedPods, intdepl, managedEndpoints); !continueReconciliation {
+	if res, continueReconciliation, err := r.reconcileDeploymentEndpoints(ctx, perDeploymentPods, intdepl, managedEndpoints); !continueReconciliation {
 		return res, err
 	}
 
 	return ctrl.Result{}, nil
 }
 
-func (r *InternalInNetworkTelemetryDeploymentReconciler) findDeploymentOfManagedPods(podRawObj client.Object) []reconcile.Request {
-	// if pods with selector of some eintDepl are changed, trigger reconciliation
-	// not all changes are of interest to us (creation, deletion, scheduling, etc), but for now trigger on all
-	// finding eintDepl based on labels of a pod IS fragile but leave it for now for simplicity
-	pod := podRawObj.(*v1.Pod)
-	if pod.ObjectMeta.Labels == nil {
-		return []reconcile.Request{}	
+func (r *InternalInNetworkTelemetryDeploymentReconciler) loadPerDeploymentPods(
+	ctx context.Context,
+	deployments map[string]*appsv1.Deployment,
+) (map[string][]v1.Pod, error) {
+	perDeploymentPods := map[string][]v1.Pod{}
+	for _, depl := range deployments {
+		podSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
+			MatchLabels: depl.Spec.Template.Labels,
+		})
+		if err != nil {
+			return nil, err
+		}
+		pods := &v1.PodList{}
+		listOptions := &client.ListOptions{
+			LabelSelector: podSelector,
+			Namespace: depl.Namespace,
+		}
+		if err := r.List(ctx, pods, listOptions); err != nil {
+			return nil, err
+		}
+		perDeploymentPods[depl.Name] = pods.Items
 	}
-	owner, ok := pod.ObjectMeta.Labels[INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL]
-	if !ok {
-		return []reconcile.Request{}	
+	return perDeploymentPods, nil
+}
+
+func createDeploymentForIntdepl(
+	intdepl *incv1alpha1.InternalInNetworkTelemetryDeployment,
+	depl incv1alpha1.NamedDeploymentSpec,
+	resourceKey types.NamespacedName,
+) *appsv1.Deployment {
+	depl.Template.Template.Spec.SchedulerName = INTERNAL_TELEMETRY_SCHEDULER_NAME
+	labels := labelsForDeploymentPods(intdepl, depl.Name)
+	depl.Template.Template.Labels = labels
+	depl.Template.Selector = &metav1.LabelSelector{
+		MatchLabels: labels,
 	}
-	return []reconcile.Request{{NamespacedName: types.NamespacedName{Name: owner, Namespace: pod.Namespace}}}
+	return &appsv1.Deployment{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: resourceKey.Name,
+			Namespace: resourceKey.Namespace,
+		},
+		Spec: depl.Template,
+	}
+}
+
+func labelsForDeploymentPods(intdepl *incv1alpha1.InternalInNetworkTelemetryDeployment, deplName string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name": "internal-INT-pod",
+		"app.kubernetes.io/instance":   intdepl.Name,
+		"app.kubernetes.io/created-by": "controller-manager",
+		INTERNAL_TELEMETRY_POD_INTDEPL_NAME_LABEL: intdepl.Name,
+		INTERNAL_TELEMETRY_POD_DEPLOYMENT_NAME_LABEL: deplName,
+	}
+}
+
+func resourceKeyForIntdepl(intdepl *incv1alpha1.InternalInNetworkTelemetryDeployment, deplName string) types.NamespacedName {
+	return types.NamespacedName{
+		Name: fmt.Sprintf("%s-%s", intdepl.Name, deplName),
+		Namespace: intdepl.Namespace,
+	} 
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -346,11 +338,6 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) SetupWithManager(mgr ct
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&incv1alpha1.InternalInNetworkTelemetryDeployment{}).
 		Owns(&appsv1.Deployment{}).
-		Owns(&incv1alpha1.ExternalInNetworkTelemetryEndpoints{}). // should we?
-		Watches(
-			&source.Kind{Type: &v1.Pod{}},
-			handler.EnqueueRequestsFromMapFunc(r.findDeploymentOfManagedPods),
-			builder.WithPredicates(predicate.ResourceVersionChangedPredicate{}), // TODO more specific
-		).
+		Owns(&incv1alpha1.ExternalInNetworkTelemetryEndpoints{}).
 		Complete(r)
 }

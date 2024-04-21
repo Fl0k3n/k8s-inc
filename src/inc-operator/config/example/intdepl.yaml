@@ -3,7 +3,8 @@ kind: InternalInNetworkTelemetryDeployment
 metadata:
   name: intdepl
 spec:
-  requiredProgram: telemetry
+  collectorRef:
+    name: collector
   deployments:
     - name: receiver
       template:

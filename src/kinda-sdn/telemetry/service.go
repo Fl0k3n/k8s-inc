@@ -170,7 +170,11 @@ func (t *TelemetryService) DisableTelemetry(
 	deviceProvider DeviceProvider,
 ) (*pbt.DisableTelemetryResponse, error) {
 	// don't unlock it, we hold the lock until it's removed, other callers always lock it in a non-blocking way
-	if ok := t.lockIntent(req.IntentId); !ok {
+	exists, locked := t.tryLockIntentIfExists(req.IntentId)
+	if !exists {
+		return &pbt.DisableTelemetryResponse{ShouldRetryLater: false}, nil
+	}	
+	if !locked {
 		return &pbt.DisableTelemetryResponse{ShouldRetryLater: true}, nil
 	}
 	// remove it concurrently and answer immediately
@@ -361,10 +365,10 @@ func (t *TelemetryService) makeDeleteChangelog(entries *ConfigEntries) *ChangeLo
 
 func (t *TelemetryService) lockIntent(intentId string) (success bool) {
 	t.intentMapLock.Lock()
+	defer t.intentMapLock.Unlock()
 	if mapLock, ok := t.intentLocks[intentId]; ok {
 		locked := mapLock.TryLock()
 		if !locked {
-			t.intentMapLock.Unlock()
 			return false
 		}
 	} else {
@@ -372,8 +376,21 @@ func (t *TelemetryService) lockIntent(intentId string) (success bool) {
 		lock.Lock()
 		t.intentLocks[intentId] = lock
 	}
-	t.intentMapLock.Unlock()
 	return true
+}
+
+func (t *TelemetryService) tryLockIntentIfExists(intentId string) (exists bool, success bool) {
+	t.intentMapLock.Lock()
+	defer t.intentMapLock.Unlock()
+	if mapLock, ok := t.intentLocks[intentId]; ok {
+		locked := mapLock.TryLock()
+		if !locked {
+			return true, false
+		}
+	} else {
+		return false, true
+	}
+	return true, true
 }
 
 func (t *TelemetryService) unlockIntent(intentId string) {
