@@ -27,6 +27,8 @@ const PROGRAM_INTERFACE = "inc.kntp.com/v1alpha1/telemetry"
 type IntentState struct {
 	Entities *TelemetryEntities
 	CollectionId string
+	CollectorNodeName string
+	CollectorPort int
 }
 
 type TelemetryService struct {
@@ -34,11 +36,11 @@ type TelemetryService struct {
 	intentLocks map[string]*sync.Mutex
 	registry programs.P4ProgramRegistry
 
-	transitStateCounter    *StateCounter[model.DeviceName]
-	sinkStateCounter       *StateCounter[ConfigureSinkKey]
-	raportingStateCounter  *StateCounter[ReportingKey]
-	activateSourceCounter  *StateCounter[ActivateSourceKey]
-	configureSourceCounter *StateCounter[ConfigureSourceKey]
+	transitStateCounter    *StateCounter
+	sinkStateCounter       *StateCounter
+	raportingStateCounter  *StateCounter
+	activateSourceCounter  *StateCounter
+	configureSourceCounter *StateCounter
 
 	collectionIdPool *CollectionIdPool
 	// key=intentId: str -> value=telemetryEntities: *IntentEntityState
@@ -50,11 +52,11 @@ func NewService(registry programs.P4ProgramRegistry) *TelemetryService {
 		intentMapLock: sync.Mutex{},
 		intentLocks: make(map[string]*sync.Mutex),
 		registry: registry,
-		transitStateCounter: newStateCounter[model.DeviceName](),
-		sinkStateCounter: newStateCounter[ConfigureSinkKey](),
-		raportingStateCounter: newStateCounter[ReportingKey](),
-		activateSourceCounter: newStateCounter[ActivateSourceKey](),
-		configureSourceCounter: newStateCounter[ConfigureSourceKey](),
+		transitStateCounter: newStateCounter(),
+		sinkStateCounter: newStateCounter(),
+		raportingStateCounter: newStateCounter(),
+		activateSourceCounter: newStateCounter(),
+		configureSourceCounter: newStateCounter(),
 		collectionIdPool: newPool(COLLECTION_ID_POOL_SIZE),
 		intentState: sync.Map{},
 	}
@@ -82,16 +84,14 @@ func (t *TelemetryService) InitDevices(ctx context.Context, topo *model.Topology
 	return nil
 }
 
-func (t *TelemetryService) EnableTelemetry(
-	req *pbt.EnableTelemetryRequest,
+func (t *TelemetryService) ConfigureTelemetry(
+	req *pbt.ConfigureTelemetryRequest,
 	topo *model.Topology,
 	deviceProvider DeviceProvider,
-) (*pbt.EnableTelemetryResponse, error) {
-	// TODO use transacion log and log every update, in case of error perform rollback
-	// TODO also consider rewriting this with dynamic programming, it could decrease the complexity to linear
+) (*pbt.ConfigureTelemetryResponse, error) {
 	if ok := t.lockIntent(req.IntentId); !ok {
 		description := "Already handling intent"
-		return &pbt.EnableTelemetryResponse{
+		return &pbt.ConfigureTelemetryResponse{
 			TelemetryState: pbt.TelemetryState_IN_PROGRESS,
 			Description: &description,
 		}, nil
@@ -109,7 +109,7 @@ func (t *TelemetryService) EnableTelemetry(
 		if currentIntentState.CollectionId != req.CollectionId {
 			// TODO: support it, not critical though
 			description := "Changing collection id is unsupported"
-			return &pbt.EnableTelemetryResponse{
+			return &pbt.ConfigureTelemetryResponse{
 				TelemetryState: pbt.TelemetryState_FAILED,
 				Description: &description,
 			}, nil 
@@ -122,28 +122,46 @@ func (t *TelemetryService) EnableTelemetry(
 	collectionid, err := t.collectionIdPool.AllocOrGet(req.IntentId, req.CollectionId)
 	if err != nil {
 		description := "Resources exhausted, use different collection id"
-		return &pbt.EnableTelemetryResponse{
+		return &pbt.ConfigureTelemetryResponse{
 			TelemetryState: pbt.TelemetryState_FAILED,
 			Description: &description,
 		}, nil 
 	}
+	var changelog *ChangeLog = nil
 	if !entriesToAdd.IsEmpty() {
-		if err := t.applyConfiguration(G, switchIds, deviceProvider, entriesToAdd,
-				req.CollectorNodeName, int(req.CollectorPort), collectionid); err != nil {
-			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, nil
-		}
+		changelog = t.makeApplyChangelog(t.getEntriesForTelemetryEntities(G, switchIds, entriesToAdd,
+			req.CollectorNodeName, int(req.CollectorPort), collectionid))
 	}
 	if !entriesToRemove.IsEmpty() {
-		if err := t.deleteConfiguration(G, deviceProvider, entriesToRemove, collectionid); err != nil {
-			return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_FAILED}, nil
+		entities := t.getEntriesForTelemetryEntities(G, switchIds, entriesToRemove,
+			req.CollectorNodeName, int(req.CollectorPort), collectionid)
+		deleteChangeLog := t.makeDeleteChangelog(entities)
+		if changelog == nil {
+			changelog = deleteChangeLog
+		} else {
+			changelog.ExtendFrom(deleteChangeLog)
+		}
+	}
+	if changelog != nil {
+		if err := t.commit(deviceProvider, changelog); err != nil {
+			if !hasCurrentState {
+				t.collectionIdPool.Free(req.IntentId, req.CollectionId)
+			}
+			description := "Failed to configure telemetry, couldn't apply some of required changes, retrying may help"
+			return &pbt.ConfigureTelemetryResponse{
+				TelemetryState: pbt.TelemetryState_FAILED,
+				Description: &description,
+			}, nil
 		}
 	}
 	currentIntentState := &IntentState{
 		Entities: desiredEntities,
 		CollectionId: req.CollectionId,
+		CollectorNodeName: req.CollectorNodeName,
+		CollectorPort: int(req.CollectorPort),
 	}
 	t.intentState.Store(req.IntentId, currentIntentState)
-	return &pbt.EnableTelemetryResponse{TelemetryState: pbt.TelemetryState_OK}, nil
+	return &pbt.ConfigureTelemetryResponse{TelemetryState: pbt.TelemetryState_OK}, nil
 }
 
 func (t *TelemetryService) DisableTelemetry(
@@ -151,7 +169,7 @@ func (t *TelemetryService) DisableTelemetry(
 	topo *model.Topology,
 	deviceProvider DeviceProvider,
 ) (*pbt.DisableTelemetryResponse, error) {
-	// don't unlock it, we hold the lock until it's removed
+	// don't unlock it, we hold the lock until it's removed, other callers always lock it in a non-blocking way
 	if ok := t.lockIntent(req.IntentId); !ok {
 		return &pbt.DisableTelemetryResponse{ShouldRetryLater: true}, nil
 	}
@@ -167,10 +185,13 @@ func (t *TelemetryService) DisableTelemetry(
 		if !ok {
 			panic("should be allocated")
 		}
-		err := t.deleteConfiguration(G, deviceProvider, currentIntentState.Entities, collectionIdNum)
-		if err != nil {
+		entities := t.getEntriesForTelemetryEntities(G, getSwitchIds(topo), currentIntentState.Entities, 
+			currentIntentState.CollectorNodeName, currentIntentState.CollectorPort, collectionIdNum)
+		changelog := t.makeDeleteChangelog(entities)
+		if err := t.commit(deviceProvider, changelog); err != nil {
 			// TODO: add it to some log and schedule retries
 			fmt.Printf("Failed to delete configuration %e", err)
+			t.unlockIntent(req.IntentId) // just while we don't do anything better
 			return
 		}
 		t.intentState.Delete(req.IntentId)
@@ -180,173 +201,162 @@ func (t *TelemetryService) DisableTelemetry(
 	return &pbt.DisableTelemetryResponse{ShouldRetryLater: false}, nil
 }
 
-func (t *TelemetryService) applyConfiguration(
+func (t *TelemetryService) getEntriesForTelemetryEntities(
 	G model.TopologyGraph,
 	switchIds map[string]int,
-	deviceProvider DeviceProvider,
-	desiredEntities *TelemetryEntities,
+	telemetryEntities *TelemetryEntities,
 	collectorNodeName string,
 	collectorPort int,
 	collectionIdNum int,
-) error {
-	for sink := range desiredEntities.Sinks {
+) *ConfigEntries {
+	entries := &ConfigEntries{
+		ActivateSourceEntries: []*ConfigEntry{},
+		ConfigureSourceEntries: []*ConfigEntry{},
+		ConfigureTransitEntries: []*ConfigEntry{},
+		ConfigureSinkEntries: []*ConfigEntry{},
+		ConfigureReportingEntry: []*ConfigEntry{},
+	}
+	for sink := range telemetryEntities.Sinks {
 		deviceMeta := G[sink.from].(*model.IncSwitch)
-		device := deviceProvider(sink.from)
 		portNumber, ok := deviceMeta.GetPortNumberTo(sink.to)
 		if !ok {
 			panic("no such neighbor")
 		}
 		collector := G[collectorNodeName]
 		portToCollector := t.findPortLeadingToDevice(G, G[sink.from], collector)
-		sinkKey := ConfigureSinkKey{egressPort: portNumber + 1}
-		entry := ConfigureSink(sinkKey, portToCollector + 1)
-		err := t.sinkStateCounter.IncrementAndRunOnTransitionToOne(sink.from, sinkKey, entry, func() error {
-			return t.writeEntry(device, entry)
+		sinkKey := &ConfigureSinkKey{egressPort: portNumber + 1}
+		entries.ConfigureSinkEntries = append(entries.ConfigureSinkEntries, &ConfigEntry{
+			deviceName: sink.from,
+			key: sinkKey,
+			entry: ConfigureSink(sinkKey, portToCollector + 1),
 		})
-		if err != nil {
-			fmt.Printf("Failed to configure sink %e\n", err)
-			return err
-		}
 
 		nextHopToCollector := G[deviceMeta.GetLinks()[portToCollector].To]
 		nextHopToCollectorMac := nextHopToCollector.MustGetLinkTo(deviceMeta.Name).MacAddr
 		portToSink := t.findPortLeadingToDevice(G, collector, G[sink.from])
-		reportingKey := ReportingKey{collectionId: collectionIdNum}
-		entry = Reporting(
-			reportingKey, 
-			deviceMeta.GetLinks()[portToCollector].MacAddr, deviceMeta.GetLinks()[portToCollector].Ipv4,
-			nextHopToCollectorMac, collector.GetLinks()[portToSink].Ipv4, collectorPort,
-		)
-		err = t.raportingStateCounter.IncrementAndRunOnTransitionToOne(sink.from, reportingKey, entry, func() error {
-			return t.writeEntry(device, entry)
-		})	
-		if err != nil {
-			fmt.Printf("Failed to configure reporting %e\n", err)
-			return err
-		}
-	}
-	for transit := range desiredEntities.Transits {
-		entry := Transit(switchIds[transit], TELEMETRY_MTU)
-		err := t.transitStateCounter.IncrementAndRunOnTransitionToOne(transit, transit, entry, func() error {
-			return t.writeEntry(deviceProvider(transit), entry)
+		reportingKey := &ReportingKey{collectionId: collectionIdNum}
+		entries.ConfigureReportingEntry = append(entries.ConfigureReportingEntry, &ConfigEntry{
+			deviceName: sink.from,
+			key: reportingKey,
+			entry: Reporting(
+				reportingKey, 
+				deviceMeta.GetLinks()[portToCollector].MacAddr, deviceMeta.GetLinks()[portToCollector].Ipv4,
+				nextHopToCollectorMac, collector.GetLinks()[portToSink].Ipv4, collectorPort,
+			),
 		})
-		if err != nil {
-			fmt.Printf("Failed to configure transit %e", err)
-			return err
-		}
 	}
-	for source, configEntries := range desiredEntities.Sources {
+	for transit := range telemetryEntities.Transits {
+		entries.ConfigureTransitEntries = append(entries.ConfigureTransitEntries, &ConfigEntry{
+			deviceName: transit,
+			key: &ConfigureTransitKey{},
+			entry: Transit(switchIds[transit], TELEMETRY_MTU),
+		})
+	}
+	for source, configEntries := range telemetryEntities.Sources {
 		deviceMeta := G[source.from].(*model.IncSwitch)
-		device := deviceProvider(source.from)
 		portToActivate, ok := deviceMeta.GetPortNumberTo(source.to)
 		if !ok {
 			panic("no such neighbor")
 		}
-		activateSourceKey := ActivateSourceKey{ingressPort: portToActivate + 1}
-		entry := ActivateSource(activateSourceKey)
-		err := t.activateSourceCounter.IncrementAndRunOnTransitionToOne(source.from, activateSourceKey, entry, func () error {
-			return t.writeEntry(device, entry)
+		activateSourceKey := &ActivateSourceKey{ingressPort: portToActivate + 1}
+		entries.ActivateSourceEntries = append(entries.ActivateSourceEntries, &ConfigEntry{
+			deviceName: source.from,
+			key: activateSourceKey,
+			entry: ActivateSource(activateSourceKey),
 		})
-		if err != nil {
-			fmt.Printf("Failed to activate source %e", err)
-			return err
-		}
 		for _, config := range configEntries {
-			key := ConfigureSourceKey{
+			configureSourceKey := &ConfigureSourceKey{
 				srcAddr: config.ips.src,
 				dstAddr: config.ips.dst,
 				srcPort: config.srcPort,
 				dstPort: config.dstPort,
 				tunneled: config.tunneled,
 			}
-			entry := ConfigureSource(key, 6, 10, 8, FULL_TELEMETRY_KEY, collectionIdNum)
-			err = t.configureSourceCounter.IncrementAndRunOnTransitionToOne(source.from, key, entry, func() error {
-				return t.writeEntry(device, entry)
+			entries.ConfigureSourceEntries = append(entries.ConfigureSourceEntries, &ConfigEntry{
+				deviceName: source.from,
+				key: configureSourceKey,
+				entry: ConfigureSource(configureSourceKey, 6, 10, 8, FULL_TELEMETRY_KEY, collectionIdNum),
 			})
-			if err != nil {
-				fmt.Printf("Failed to configure source %e", err)
-				return err
-			}
 		}
 	}
-	return nil
+	return entries
 }
 
-func (t *TelemetryService) deleteConfiguration(
-	G model.TopologyGraph,
-	deviceProvider DeviceProvider,
-	entriesToDelete *TelemetryEntities,
-	collectionIdNum int,
-) error {
-	for source, configEntries := range entriesToDelete.Sources {
-		deviceMeta := G[source.from].(*model.IncSwitch)
-		device := deviceProvider(source.from)
-		portToActivate, ok := deviceMeta.GetPortNumberTo(source.to)
-		if !ok {
-			panic("no such neighbor")
+// if error occurs changes are rolled-back
+func (t *TelemetryService) commit(deviceProvider DeviceProvider, changelog *ChangeLog) error {
+	applyChange := func(action *StateChangeAction) error {
+		var err error = nil
+		if action.isCreate {
+			err = action.counter.IncrementAndRunOnTransitionToOne(
+				action.deviceName,
+				action.key,
+				action.entry,
+				func() error {
+					return t.writeEntry(deviceProvider(action.deviceName), action.entry)
+				},
+			)	
+		} else {
+			err = action.counter.DecrementAndRunOnTransitionToZero(
+				action.deviceName,
+				action.key,
+				func(entry connector.RawTableEntry) error {
+					return t.deleteEntry(deviceProvider(action.deviceName), entry)
+				},
+			)	
 		}
-		for _, config := range configEntries {
-			key := ConfigureSourceKey{
-				srcAddr: config.ips.src,
-				dstAddr: config.ips.dst,
-				srcPort: config.srcPort,
-				dstPort: config.dstPort,
-				tunneled: config.tunneled,
+		return err
+	}
+	err := changelog.Commit(applyChange)
+	if err != nil {
+		failedActions := changelog.Rollback(applyChange)
+		if len(failedActions) > 0 {
+			// TODO: schedule retries or notify some{thing,body} or check why they failed and do something with it
+			for _, action := range failedActions {
+				fmt.Printf("failed to rollback action: %v\n", action)
 			}
-			err := t.configureSourceCounter.DecrementAndRunOnTransitionToZero(source.from, key, func(entry connector.RawTableEntry) error {
-				return t.deleteEntry(device, entry)
-			})
-			if err != nil {
-				fmt.Printf("Failed to remove source configuration %e", err)
-				return err
-			}
-		}
-		activateSourceKey := ActivateSourceKey{ingressPort: portToActivate + 1}
-		err := t.activateSourceCounter.DecrementAndRunOnTransitionToZero(
-				source.from,
-				activateSourceKey,
-				func (entry connector.RawTableEntry) error {
-			return t.deleteEntry(device, entry)
-		})
-		if err != nil {
-			fmt.Printf("Failed to deactivate source %e", err)
-			return err
 		}
 	}
-	for transit := range entriesToDelete.Transits {
-		err := t.transitStateCounter.DecrementAndRunOnTransitionToZero(transit, transit, func(entry connector.RawTableEntry) error {
-			return t.deleteEntry(deviceProvider(transit), entry)
-		})
-		if err != nil {
-			fmt.Printf("Failed to deactivate transit %e", err)
-			return err
-		}
+	return err
+}
+
+func (t *TelemetryService) makeApplyChangelog(entries *ConfigEntries) *ChangeLog {
+	changelog := newChangeLog()
+	for _, entry := range entries.ConfigureSinkEntries {
+		changelog.AddAction(newCreateAction(entry.deviceName, entry.key, entry.entry, t.sinkStateCounter))
 	}
-	for sink := range entriesToDelete.Sinks {
-		deviceMeta := G[sink.from].(*model.IncSwitch)
-		device := deviceProvider(sink.from)
-		portNumber, ok := deviceMeta.GetPortNumberTo(sink.to)
-		if !ok {
-			panic("no such neighbor")
-		}
-		reportingKey := ReportingKey{collectionId: collectionIdNum}
-		err := t.raportingStateCounter.DecrementAndRunOnTransitionToZero(sink.from, reportingKey, func(entry connector.RawTableEntry) error {
-			return t.deleteEntry(device, entry)
-		})	
-		if err != nil {
-			fmt.Printf("Failed to deactivate reporting %e", err)
-			return err
-		}
-		sinkKey := ConfigureSinkKey{egressPort: portNumber + 1}
-		err = t.sinkStateCounter.DecrementAndRunOnTransitionToZero(sink.from, sinkKey, func(entry connector.RawTableEntry) error {
-			return t.deleteEntry(device, entry)
-		})
-		if err != nil {
-			fmt.Printf("Failed to deactivate sink %e", err)
-			return err
-		}
+	for _, entry := range entries.ConfigureReportingEntry {
+		changelog.AddAction(newCreateAction(entry.deviceName, entry.key, entry.entry, t.raportingStateCounter))
 	}
-	return nil
+	for _, entry := range entries.ConfigureTransitEntries {
+		changelog.AddAction(newCreateAction(entry.deviceName, entry.key, entry.entry, t.transitStateCounter))
+	}
+	for _, entry := range entries.ActivateSourceEntries {
+		changelog.AddAction(newCreateAction(entry.deviceName, entry.key, entry.entry, t.activateSourceCounter)) 
+	}
+	for _, entry := range entries.ConfigureSourceEntries {
+		changelog.AddAction(newCreateAction(entry.deviceName, entry.key, entry.entry, t.configureSourceCounter))
+	}
+	return changelog
+}
+
+func (t *TelemetryService) makeDeleteChangelog(entries *ConfigEntries) *ChangeLog {
+	changelog := newChangeLog()
+	for _, entry := range entries.ConfigureSourceEntries {
+		changelog.AddAction(newDeleteAction(entry.deviceName, entry.key, entry.entry, t.configureSourceCounter))
+	}
+	for _, entry := range entries.ActivateSourceEntries {
+		changelog.AddAction(newDeleteAction(entry.deviceName, entry.key, entry.entry, t.activateSourceCounter)) 
+	}
+	for _, entry := range entries.ConfigureTransitEntries {
+		changelog.AddAction(newDeleteAction(entry.deviceName, entry.key, entry.entry, t.transitStateCounter))
+	}
+	for _, entry := range entries.ConfigureReportingEntry {
+		changelog.AddAction(newDeleteAction(entry.deviceName, entry.key, entry.entry, t.raportingStateCounter))
+	}
+	for _, entry := range entries.ConfigureSinkEntries {
+		changelog.AddAction(newDeleteAction(entry.deviceName, entry.key, entry.entry, t.sinkStateCounter))
+	}
+	return changelog
 }
 
 func (t *TelemetryService) lockIntent(intentId string) (success bool) {
@@ -378,6 +388,7 @@ func (t *TelemetryService) writeEntry(device device.IncSwitch, entry connector.R
 	if err := device.WriteEntry(ctx, entry); err != nil {
 		if connector.IsEntryExistsError(err) {
 			fmt.Printf("Entry already exists, table = %s\n", entry.TableName)
+			// return nil // ignore it
 		} else {
 			fmt.Printf("Failed to write entry %s\n%e", entry, err)
 		}
@@ -392,6 +403,7 @@ func (t *TelemetryService) deleteEntry(device device.IncSwitch, entry connector.
 	if err := device.DeleteEntry(ctx, entry); err != nil {
 		if connector.IsEntryNotFoundError(err) {
 			fmt.Printf("Entry doesn't exists, table = %s\n", entry.TableName)
+			// return nil // ignore it
 		} else {
 			fmt.Printf("Failed to write entry %s\n%e", entry, err)
 		}

@@ -162,7 +162,8 @@ func (t *TelemetryService) createRawTelemetryConfig(
 	}
 }
 
-func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.EnableTelemetryRequest, G model.TopologyGraph) *TelemetryEntities {
+func (t *TelemetryService) findTelemetryEntitiesForRequest(req *pbt.ConfigureTelemetryRequest, G model.TopologyGraph) *TelemetryEntities {
+	// TODO consider rewriting this with dynamic programming, it could decrease the complexity to linear
 	res := newTelemetryEntities()
 
 	for sourceIdx, source := range getSourceDeviceNames(req) {

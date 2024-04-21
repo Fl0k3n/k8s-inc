@@ -10,16 +10,42 @@ const ANY_PORT = -1
 const ANY_IPv4 = "any"
 const FULL_TELEMETRY_KEY = 0xFF00
 
+type MatchIdentifier = string
+
+type MatchKey interface {
+	ToIdentifier() MatchIdentifier
+}
+
+type ConfigureTransitKey struct {
+
+}
+
+func (c *ConfigureTransitKey) ToIdentifier() MatchIdentifier {
+	return ""
+}
+
 type ConfigureSinkKey struct {
 	egressPort int
+}
+
+func (c *ConfigureSinkKey) ToIdentifier() MatchIdentifier {
+	return fmt.Sprintf("%d", c.egressPort)
 }
 
 type ReportingKey struct {
 	collectionId int
 }
 
+func (c *ReportingKey) ToIdentifier() MatchIdentifier {
+	return fmt.Sprintf("%d", c.collectionId)
+}
+
 type ActivateSourceKey struct {
 	ingressPort int
+}
+
+func (c *ActivateSourceKey) ToIdentifier() MatchIdentifier {
+	return fmt.Sprintf("%d", c.ingressPort)
 }
 
 type ConfigureSourceKey struct {
@@ -28,6 +54,14 @@ type ConfigureSourceKey struct {
 	srcPort int
 	dstPort int
 	tunneled bool
+}
+
+func (c *ConfigureSourceKey) ToIdentifier() string {
+	isTunneled := "tun"
+	if !c.tunneled {
+		isTunneled = "raw"
+	}
+	return fmt.Sprintf("%s_%s_%d_%d_%s", c.srcAddr, c.dstAddr, c.srcPort, c.dstPort, isTunneled)
 }
 
 func Forward(ip string, srcMac string, dstMac string, port string) connector.RawTableEntry {
@@ -83,7 +117,7 @@ func Transit(switchId int, mtu int) connector.RawTableEntry {
 	}
 }
 
-func ActivateSource(key ActivateSourceKey) connector.RawTableEntry {
+func ActivateSource(key *ActivateSourceKey) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_activate_source",
 		Match: map[string]string{
@@ -95,7 +129,7 @@ func ActivateSource(key ActivateSourceKey) connector.RawTableEntry {
 }
 
 func ConfigureSource(
-	key ConfigureSourceKey,
+	key *ConfigureSourceKey,
 	maxHop int, hopMetadataLen int, insCnt int, insMask int, collectionId int,
 ) connector.RawTableEntry {
 	match := map[string]string{}
@@ -139,7 +173,7 @@ func ExactPortTernary(port int) string {
 	return fmt.Sprintf("%d&&&0xFFFF", port)
 }
 
-func ConfigureSink(key ConfigureSinkKey, sinkReportingPort int) connector.RawTableEntry {
+func ConfigureSink(key *ConfigureSinkKey, sinkReportingPort int) connector.RawTableEntry {
 	return connector.RawTableEntry{
 		TableName: "tb_int_sink",
 		Match: map[string]string{
@@ -153,7 +187,7 @@ func ConfigureSink(key ConfigureSinkKey, sinkReportingPort int) connector.RawTab
 }
 
 func Reporting(
-	key ReportingKey,
+	key *ReportingKey,
 	srcMac string, srcIp string,
 	collectorMac string, collectorIp string, collectorUdpPort int,
 ) connector.RawTableEntry {

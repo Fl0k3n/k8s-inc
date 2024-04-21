@@ -2,6 +2,7 @@ package telemetry
 
 import (
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
+	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 )
 
@@ -40,14 +41,28 @@ func newTelemetryEntities() *TelemetryEntities {
 	}
 }
 
-func getSourceDeviceNames(req *pbt.EnableTelemetryRequest) []string {
+type ConfigEntry struct {
+	deviceName model.DeviceName
+	key MatchKey
+	entry connector.RawTableEntry
+}
+
+type ConfigEntries struct {
+	ActivateSourceEntries []*ConfigEntry
+	ConfigureSourceEntries []*ConfigEntry
+	ConfigureTransitEntries []*ConfigEntry
+	ConfigureSinkEntries []*ConfigEntry
+	ConfigureReportingEntry []*ConfigEntry
+}
+
+func getSourceDeviceNames(req *pbt.ConfigureTelemetryRequest) []string {
 	res := []string{}
 	switch s := req.Sources.(type) {
-	case *pbt.EnableTelemetryRequest_RawSources:
+	case *pbt.ConfigureTelemetryRequest_RawSources:
 		for _, x := range s.RawSources.Entities {
 			res = append(res, x.DeviceName)
 		}
-	case *pbt.EnableTelemetryRequest_TunneledSources:
+	case *pbt.ConfigureTelemetryRequest_TunneledSources:
 		for devName := range s.TunneledSources.DeviceNamesWithEntities {
 			res = append(res, devName)
 		}
@@ -55,14 +70,14 @@ func getSourceDeviceNames(req *pbt.EnableTelemetryRequest) []string {
 	return res
 }
 
-func getTargetDeviceNames(req *pbt.EnableTelemetryRequest) []string {
+func getTargetDeviceNames(req *pbt.ConfigureTelemetryRequest) []string {
 	res := []string{}
 	switch t := req.Targets.(type) {
-	case *pbt.EnableTelemetryRequest_RawTargets:
+	case *pbt.ConfigureTelemetryRequest_RawTargets:
 		for _, x := range t.RawTargets.Entities {
 			res = append(res, x.DeviceName)
 		}
-	case *pbt.EnableTelemetryRequest_TunneledTargets:
+	case *pbt.ConfigureTelemetryRequest_TunneledTargets:
 		for devName := range t.TunneledTargets.DeviceNamesWithEntities {
 			res = append(res, devName)
 		}
@@ -70,27 +85,27 @@ func getTargetDeviceNames(req *pbt.EnableTelemetryRequest) []string {
 	return res
 }
 
-func requiresTunneling(req *pbt.EnableTelemetryRequest) bool {
-	_, isTunneled := req.Sources.(*pbt.EnableTelemetryRequest_TunneledSources)
+func requiresTunneling(req *pbt.ConfigureTelemetryRequest) bool {
+	_, isTunneled := req.Sources.(*pbt.ConfigureTelemetryRequest_TunneledSources)
 	return isTunneled
 }
 
 type EntityDetails interface {}
 
-func getSourceDetails(req *pbt.EnableTelemetryRequest, deviceName string, sourceIdx int) EntityDetails {
-	if raw, ok := req.Sources.(*pbt.EnableTelemetryRequest_RawSources); ok {
+func getSourceDetails(req *pbt.ConfigureTelemetryRequest, deviceName string, sourceIdx int) EntityDetails {
+	if raw, ok := req.Sources.(*pbt.ConfigureTelemetryRequest_RawSources); ok {
 		return raw.RawSources.Entities[sourceIdx]
 	} else {
-		tun := req.Sources.(*pbt.EnableTelemetryRequest_TunneledSources)
+		tun := req.Sources.(*pbt.ConfigureTelemetryRequest_TunneledSources)
 		return tun.TunneledSources.DeviceNamesWithEntities[deviceName]
 	}
 }
 
-func getTargetDetails(req *pbt.EnableTelemetryRequest, deviceName string, targetIdx int) EntityDetails {
-	if raw, ok := req.Targets.(*pbt.EnableTelemetryRequest_RawTargets); ok {
+func getTargetDetails(req *pbt.ConfigureTelemetryRequest, deviceName string, targetIdx int) EntityDetails {
+	if raw, ok := req.Targets.(*pbt.ConfigureTelemetryRequest_RawTargets); ok {
 		return raw.RawTargets.Entities[targetIdx]
 	} else {
-		tun := req.Targets.(*pbt.EnableTelemetryRequest_TunneledTargets)
+		tun := req.Targets.(*pbt.ConfigureTelemetryRequest_TunneledTargets)
 		return tun.TunneledTargets.DeviceNamesWithEntities[deviceName]
 	}
 }

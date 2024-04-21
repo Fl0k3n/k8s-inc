@@ -13,25 +13,25 @@ type TableState struct {
 	entry connector.RawTableEntry
 }
 
-type DeviceState [K comparable] struct {
+type DeviceState struct {
 	lock *sync.Mutex
-	tableState map[K]TableState
+	tableState map[MatchIdentifier]TableState
 }
 
-type StateCounter [K comparable] struct {
+type StateCounter struct {
 	deviceState sync.Map // map[model.DeviceName]*DeviceState
 }
 
-func newStateCounter[K comparable]() *StateCounter[K] {
-	return &StateCounter[K]{
+func newStateCounter() *StateCounter {
+	return &StateCounter{
 		deviceState: sync.Map{},
 	}
 }
 
-func (s *StateCounter[K]) AddDevice(devName model.DeviceName) {
-	state := &DeviceState[K]{
+func (s *StateCounter) AddDevice(devName model.DeviceName) {
+	state := &DeviceState{
 		lock: &sync.Mutex{},
-		tableState: map[K]TableState{},
+		tableState: map[MatchIdentifier]TableState{},
 	}
 	s.deviceState.Store(devName, state)
 }
@@ -40,9 +40,9 @@ func (s *StateCounter[K]) AddDevice(devName model.DeviceName) {
 // lock is released once runnable returns, if new goroutines are created and not awaited their
 // actions won't be atomic with respect to the counter change, if runnable returns error counter 
 // is not incremented, returns error returned by runnable or nil if it wasn't run
-func (s *StateCounter[K]) IncrementAndRunOnTransitionToOne(
+func (s *StateCounter) IncrementAndRunOnTransitionToOne(
 	devName model.DeviceName,
-	key K,
+	key MatchKey,
 	val connector.RawTableEntry,
 	runnable func() error,
 ) error {
@@ -50,10 +50,10 @@ func (s *StateCounter[K]) IncrementAndRunOnTransitionToOne(
 	if !ok {
 		panic(fmt.Sprintf("Device name %s state not initialized", devName))
 	}
-	state := devState.(*DeviceState[K])
+	state := devState.(*DeviceState)
 	state.lock.Lock()
 	defer state.lock.Unlock()
-	tableState, ok := state.tableState[key]
+	tableState, ok := state.tableState[key.ToIdentifier()]
 	if !ok {
 		tableState.counter = 0
 		tableState.entry = val
@@ -64,23 +64,23 @@ func (s *StateCounter[K]) IncrementAndRunOnTransitionToOne(
 		}
 	}
 	tableState.counter += 1
-	state.tableState[key] = tableState
+	state.tableState[key.ToIdentifier()] = tableState
 	return nil
 }
 
-func (s *StateCounter[K]) DecrementAndRunOnTransitionToZero(
+func (s *StateCounter) DecrementAndRunOnTransitionToZero(
 	devName model.DeviceName,
-	key K,
+	key MatchKey,
 	runnable func(val connector.RawTableEntry) error,
 ) error {
 	devState, ok := s.deviceState.Load(devName)
 	if !ok {
 		panic(fmt.Sprintf("Device name %s state not initialized", devName))
 	}
-	state := devState.(*DeviceState[K])
+	state := devState.(*DeviceState)
 	state.lock.Lock()
 	defer state.lock.Unlock()
-	tableState, ok := state.tableState[key]
+	tableState, ok := state.tableState[key.ToIdentifier()]
 	if !ok {
 		return fmt.Errorf("attempted to decrement counter for non-existing entry")
 	}
@@ -88,10 +88,10 @@ func (s *StateCounter[K]) DecrementAndRunOnTransitionToZero(
 		if err := runnable(tableState.entry); err != nil {
 			return err	
 		}
-		delete(state.tableState, key)
+		delete(state.tableState, key.ToIdentifier())
 	} else {
 		tableState.counter--
-		state.tableState[key] = tableState
+		state.tableState[key.ToIdentifier()] = tableState
 	}
 	return nil
 }

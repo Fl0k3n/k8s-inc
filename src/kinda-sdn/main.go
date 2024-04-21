@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"time"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/controller"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
@@ -63,17 +64,17 @@ func main() {
 	fmt.Println("Running gRpc server")
 	sprt := int32(7676)
 	dprt := int32(7878)
-	_, er := kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
+	_, er := kindaSdn.ConfigureTelemetry(context.Background(), &pbt.ConfigureTelemetryRequest{
 		IntentId: "i1",
 		CollectionId: "asd",
 		CollectorNodeName: "w5",
 		CollectorPort: 6000,
-		Sources: &pbt.EnableTelemetryRequest_RawSources{
+		Sources: &pbt.ConfigureTelemetryRequest_RawSources{
 			RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
 				{DeviceName: "w1", Port: &sprt},
 			},
 		}},
-		Targets: &pbt.EnableTelemetryRequest_RawTargets{
+		Targets: &pbt.ConfigureTelemetryRequest_RawTargets{
 			RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
 				{DeviceName: "w3", Port: &dprt},
 			}},
@@ -82,18 +83,50 @@ func main() {
 	if er != nil {
 		panic(er)
 	}
+	_, er = kindaSdn.ConfigureTelemetry(context.Background(), &pbt.ConfigureTelemetryRequest{
+		IntentId: "i2",
+		CollectionId: "asd",
+		CollectorNodeName: "w5",
+		CollectorPort: 6000,
+		Sources: &pbt.ConfigureTelemetryRequest_RawSources{
+			RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+				{DeviceName: "w1", Port: &sprt},
+			},
+		}},
+		Targets: &pbt.ConfigureTelemetryRequest_RawTargets{
+			RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
+				{DeviceName: "w3", Port: &dprt},
+			}},
+		},
+	})
+	if er != nil {
+		panic(er)
+	}
+	resp, er := kindaSdn.DisableTelemetry(context.Background(), &pbt.DisableTelemetryRequest{
+		IntentId: "i1",
+	})
+	if er != nil || resp.ShouldRetryLater {
+		panic(er)
+	}
+	time.Sleep(time.Second * 2)
+	resp, er = kindaSdn.DisableTelemetry(context.Background(), &pbt.DisableTelemetryRequest{
+		IntentId: "i2",
+	})
+	if er != nil || resp.ShouldRetryLater {
+		panic(er)
+	}
 	// sprt += 1
 	// dprt += 1
-	// _, er = kindaSdn.EnableTelemetry(context.Background(), &pbt.EnableTelemetryRequest{
+	// _, er = kindaSdn.ConfigureTelemetry(context.Background(), &pbt.ConfigureTelemetryRequest{
 	// 	CollectionId: "asd2",
 	// 	CollectorNodeName: "w4",
 	// 	CollectorPort: 6001,
-	// 	Sources: &pbt.EnableTelemetryRequest_RawSources{
+	// 	Sources: &pbt.ConfigureTelemetryRequest_RawSources{
 	// 		RawSources: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
 	// 			{DeviceName: "w1", Port: &sprt},
 	// 		},
 	// 	}},
-	// 	Targets: &pbt.EnableTelemetryRequest_RawTargets{
+	// 	Targets: &pbt.ConfigureTelemetryRequest_RawTargets{
 	// 		RawTargets: &pbt.RawTelemetryEntities{Entities: []*pbt.RawTelemetryEntity{
 	// 			{DeviceName: "w3", Port: &dprt},
 	// 		}},

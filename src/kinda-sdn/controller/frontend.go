@@ -52,8 +52,8 @@ func (m *KindaSdn) GetSwitchDetails(ctx context.Context, names *pb.SwitchNames) 
 	}, nil
 }
 
-func (m *KindaSdn) EnableTelemetry(ctx context.Context, req *pbt.EnableTelemetryRequest) (*pbt.EnableTelemetryResponse, error) {
-	return m.telemetryService.EnableTelemetry(req, m.topo, func(dn model.DeviceName) device.IncSwitch {
+func (m *KindaSdn) ConfigureTelemetry(ctx context.Context, req *pbt.ConfigureTelemetryRequest) (*pbt.ConfigureTelemetryResponse, error) {
+	return m.telemetryService.ConfigureTelemetry(req, m.topo, func(dn model.DeviceName) device.IncSwitch {
 		return m.bmv2Managers[dn]
 	})	
 }

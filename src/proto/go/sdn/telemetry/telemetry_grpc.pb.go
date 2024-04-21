@@ -22,7 +22,7 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type TelemetryServiceClient interface {
-	EnableTelemetry(ctx context.Context, in *EnableTelemetryRequest, opts ...grpc.CallOption) (*EnableTelemetryResponse, error)
+	ConfigureTelemetry(ctx context.Context, in *ConfigureTelemetryRequest, opts ...grpc.CallOption) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(ctx context.Context, in *DisableTelemetryRequest, opts ...grpc.CallOption) (*DisableTelemetryResponse, error)
 }
 
@@ -34,9 +34,9 @@ func NewTelemetryServiceClient(cc grpc.ClientConnInterface) TelemetryServiceClie
 	return &telemetryServiceClient{cc}
 }
 
-func (c *telemetryServiceClient) EnableTelemetry(ctx context.Context, in *EnableTelemetryRequest, opts ...grpc.CallOption) (*EnableTelemetryResponse, error) {
-	out := new(EnableTelemetryResponse)
-	err := c.cc.Invoke(ctx, "/telemetry.TelemetryService/EnableTelemetry", in, out, opts...)
+func (c *telemetryServiceClient) ConfigureTelemetry(ctx context.Context, in *ConfigureTelemetryRequest, opts ...grpc.CallOption) (*ConfigureTelemetryResponse, error) {
+	out := new(ConfigureTelemetryResponse)
+	err := c.cc.Invoke(ctx, "/telemetry.TelemetryService/ConfigureTelemetry", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -56,7 +56,7 @@ func (c *telemetryServiceClient) DisableTelemetry(ctx context.Context, in *Disab
 // All implementations must embed UnimplementedTelemetryServiceServer
 // for forward compatibility
 type TelemetryServiceServer interface {
-	EnableTelemetry(context.Context, *EnableTelemetryRequest) (*EnableTelemetryResponse, error)
+	ConfigureTelemetry(context.Context, *ConfigureTelemetryRequest) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()
 }
@@ -65,8 +65,8 @@ type TelemetryServiceServer interface {
 type UnimplementedTelemetryServiceServer struct {
 }
 
-func (UnimplementedTelemetryServiceServer) EnableTelemetry(context.Context, *EnableTelemetryRequest) (*EnableTelemetryResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method EnableTelemetry not implemented")
+func (UnimplementedTelemetryServiceServer) ConfigureTelemetry(context.Context, *ConfigureTelemetryRequest) (*ConfigureTelemetryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfigureTelemetry not implemented")
 }
 func (UnimplementedTelemetryServiceServer) DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DisableTelemetry not implemented")
@@ -84,20 +84,20 @@ func RegisterTelemetryServiceServer(s grpc.ServiceRegistrar, srv TelemetryServic
 	s.RegisterService(&TelemetryService_ServiceDesc, srv)
 }
 
-func _TelemetryService_EnableTelemetry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(EnableTelemetryRequest)
+func _TelemetryService_ConfigureTelemetry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfigureTelemetryRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(TelemetryServiceServer).EnableTelemetry(ctx, in)
+		return srv.(TelemetryServiceServer).ConfigureTelemetry(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/telemetry.TelemetryService/EnableTelemetry",
+		FullMethod: "/telemetry.TelemetryService/ConfigureTelemetry",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TelemetryServiceServer).EnableTelemetry(ctx, req.(*EnableTelemetryRequest))
+		return srv.(TelemetryServiceServer).ConfigureTelemetry(ctx, req.(*ConfigureTelemetryRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -128,8 +128,8 @@ var TelemetryService_ServiceDesc = grpc.ServiceDesc{
 	HandlerType: (*TelemetryServiceServer)(nil),
 	Methods: []grpc.MethodDesc{
 		{
-			MethodName: "EnableTelemetry",
-			Handler:    _TelemetryService_EnableTelemetry_Handler,
+			MethodName: "ConfigureTelemetry",
+			Handler:    _TelemetryService_ConfigureTelemetry_Handler,
 		},
 		{
 			MethodName: "DisableTelemetry",
