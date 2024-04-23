@@ -1,0 +1,12 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: TelemetryDeviceResources
+metadata:
+  labels:
+    app.kubernetes.io/name: telemetrydeviceresources
+    app.kubernetes.io/instance: telemetrydeviceresources-sample
+    app.kubernetes.io/part-of: inc-operator
+    app.kubernetes.io/managed-by: kustomize
+    app.kubernetes.io/created-by: inc-operator
+  name: telemetrydeviceresources-sample
+spec:
+  # TODO(user): Add fields here

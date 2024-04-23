@@ -224,6 +224,10 @@ func (t *TelemetryService) ObserveSourceCapabilityUpdates(stopChan chan struct{}
 	return t.sourceCapabilityMonitor.RegisterDownstreamObserver(stopChan)
 }
 
+func (t *TelemetryService) GetSourceCapabilities() *pbt.SourceCapabilityUpdate {
+	return t.createCapabilityUpdate()
+}
+
 func (t *TelemetryService) getEntriesForTelemetryEntities(
 	G model.TopologyGraph,
 	switchIds map[string]int,

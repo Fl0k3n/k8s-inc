@@ -68,17 +68,16 @@ func (m *KindaSdn) DisableTelemetry(ctx context.Context, req *pbt.DisableTelemet
 }
 
 func (m *KindaSdn) SubscribeSourceCapabilities(_ *empty.Empty, respStream pbt.TelemetryService_SubscribeSourceCapabilitiesServer) error {
-	fmt.Printf("Handling SubscribeSourceCapabilities")
+	fmt.Printf("Handling SubscribeSourceCapabilities\n")
 	stopChan := make(chan struct{})	
-	go func() {
-		updateChan := m.telemetryService.ObserveSourceCapabilityUpdates(stopChan)
-		for msg := range updateChan {
-			if err := respStream.Send(msg); err != nil {
-				fmt.Printf("Failed to send capability update %e\n", err)
-				close(stopChan)
-				return
-			}
+	updateChan := m.telemetryService.ObserveSourceCapabilityUpdates(stopChan)
+	respStream.Send(m.telemetryService.GetSourceCapabilities())
+	for msg := range updateChan {
+		if err := respStream.Send(msg); err != nil {
+			fmt.Printf("Failed to send capability update %e\n", err)
+			close(stopChan)
+			return nil
 		}
-	}()
+	}
 	return nil
 }

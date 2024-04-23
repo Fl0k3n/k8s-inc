@@ -56,4 +56,13 @@ resources:
   kind: Collector
   path: github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1
   version: v1alpha1
+- api:
+    crdVersion: v1
+    namespaced: true
+  controller: true
+  domain: kntp.com
+  group: inc
+  kind: TelemetryDeviceResources
+  path: github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1
+  version: v1alpha1
 version: "3"

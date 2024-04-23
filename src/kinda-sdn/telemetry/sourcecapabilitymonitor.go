@@ -1,6 +1,7 @@
 package telemetry
 
 import (
+	"fmt"
 	"sync"
 
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
@@ -57,7 +58,8 @@ func (m *SourceCapabilityMonitor) run() {
 		m.observerListLock.Lock()
 		j := 0
 		for i, obs := range observersShallowCopy {
-			if i == removedObservers[j] {
+			if j < len(removedObservers) && i == removedObservers[j] {
+				fmt.Printf("Removing observer %d\n", removedObservers[j])
 				j++
 			} else {
 				remainingObservers = append(remainingObservers, obs)
