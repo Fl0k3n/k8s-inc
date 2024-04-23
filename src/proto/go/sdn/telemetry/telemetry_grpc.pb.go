@@ -8,6 +8,7 @@ package telemetry
 
 import (
 	context "context"
+	empty "github.com/golang/protobuf/ptypes/empty"
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -24,6 +25,7 @@ const _ = grpc.SupportPackageIsVersion7
 type TelemetryServiceClient interface {
 	ConfigureTelemetry(ctx context.Context, in *ConfigureTelemetryRequest, opts ...grpc.CallOption) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(ctx context.Context, in *DisableTelemetryRequest, opts ...grpc.CallOption) (*DisableTelemetryResponse, error)
+	SubscribeSourceCapabilities(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (TelemetryService_SubscribeSourceCapabilitiesClient, error)
 }
 
 type telemetryServiceClient struct {
@@ -52,12 +54,45 @@ func (c *telemetryServiceClient) DisableTelemetry(ctx context.Context, in *Disab
 	return out, nil
 }
 
+func (c *telemetryServiceClient) SubscribeSourceCapabilities(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (TelemetryService_SubscribeSourceCapabilitiesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &TelemetryService_ServiceDesc.Streams[0], "/telemetry.TelemetryService/SubscribeSourceCapabilities", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &telemetryServiceSubscribeSourceCapabilitiesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type TelemetryService_SubscribeSourceCapabilitiesClient interface {
+	Recv() (*SourceCapabilityUpdate, error)
+	grpc.ClientStream
+}
+
+type telemetryServiceSubscribeSourceCapabilitiesClient struct {
+	grpc.ClientStream
+}
+
+func (x *telemetryServiceSubscribeSourceCapabilitiesClient) Recv() (*SourceCapabilityUpdate, error) {
+	m := new(SourceCapabilityUpdate)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // TelemetryServiceServer is the server API for TelemetryService service.
 // All implementations must embed UnimplementedTelemetryServiceServer
 // for forward compatibility
 type TelemetryServiceServer interface {
 	ConfigureTelemetry(context.Context, *ConfigureTelemetryRequest) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error)
+	SubscribeSourceCapabilities(*empty.Empty, TelemetryService_SubscribeSourceCapabilitiesServer) error
 	mustEmbedUnimplementedTelemetryServiceServer()
 }
 
@@ -70,6 +105,9 @@ func (UnimplementedTelemetryServiceServer) ConfigureTelemetry(context.Context, *
 }
 func (UnimplementedTelemetryServiceServer) DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DisableTelemetry not implemented")
+}
+func (UnimplementedTelemetryServiceServer) SubscribeSourceCapabilities(*empty.Empty, TelemetryService_SubscribeSourceCapabilitiesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeSourceCapabilities not implemented")
 }
 func (UnimplementedTelemetryServiceServer) mustEmbedUnimplementedTelemetryServiceServer() {}
 
@@ -120,6 +158,27 @@ func _TelemetryService_DisableTelemetry_Handler(srv interface{}, ctx context.Con
 	return interceptor(ctx, in, info, handler)
 }
 
+func _TelemetryService_SubscribeSourceCapabilities_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(empty.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(TelemetryServiceServer).SubscribeSourceCapabilities(m, &telemetryServiceSubscribeSourceCapabilitiesServer{stream})
+}
+
+type TelemetryService_SubscribeSourceCapabilitiesServer interface {
+	Send(*SourceCapabilityUpdate) error
+	grpc.ServerStream
+}
+
+type telemetryServiceSubscribeSourceCapabilitiesServer struct {
+	grpc.ServerStream
+}
+
+func (x *telemetryServiceSubscribeSourceCapabilitiesServer) Send(m *SourceCapabilityUpdate) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // TelemetryService_ServiceDesc is the grpc.ServiceDesc for TelemetryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -136,6 +195,12 @@ var TelemetryService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _TelemetryService_DisableTelemetry_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeSourceCapabilities",
+			Handler:       _TelemetryService_SubscribeSourceCapabilities_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "sdn/telemetry/telemetry.proto",
 }

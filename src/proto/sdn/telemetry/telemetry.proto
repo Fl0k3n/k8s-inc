@@ -1,5 +1,7 @@
 syntax = "proto3";
 
+import "google/protobuf/empty.proto";
+
 option go_package = "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry";
 
 package telemetry;
@@ -7,6 +9,7 @@ package telemetry;
 service TelemetryService {
     rpc ConfigureTelemetry(ConfigureTelemetryRequest) returns (ConfigureTelemetryResponse) {}
     rpc DisableTelemetry(DisableTelemetryRequest) returns (DisableTelemetryResponse) {}
+    rpc SubscribeSourceCapabilities(google.protobuf.Empty) returns (stream SourceCapabilityUpdate) {} 
 }
 
 message ConfigureTelemetryRequest {
@@ -61,7 +64,10 @@ message DisableTelemetryRequest {
     string intentId = 1;
 }
 
-
 message DisableTelemetryResponse {
     bool shouldRetryLater = 1;
+}
+
+message SourceCapabilityUpdate {
+    map<string, int32> remainingSourceEndpoints = 1;    
 }

@@ -9,8 +9,8 @@ func Measure_gRPC_topo() *model.Topology {
         "r1", 
         []*model.Link{
             model.NewLink("r2", "00:00:0a:00:00:00", "10.0.0.1", 24),
-            model.NewLink("w1", "00:00:0a:00:00:01", "10.0.2.1", 24),
-            model.NewLink("w2", "00:00:0a:00:00:02", "10.0.3.1", 24),
+            model.NewLink("tree-worker3", "00:00:0a:00:00:01", "10.0.2.1", 24),
+            model.NewLink("tree-worker4", "00:00:0a:00:00:02", "10.0.3.1", 24),
         },
         "127.0.0.1:9560",
     )
@@ -24,7 +24,7 @@ func Measure_gRPC_topo() *model.Topology {
     )
     dev2 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "w1",
+            Name: "tree-worker3",
             Links: []*model.Link{
                 model.NewLink("r1", "00:00:0a:00:00:05", "10.0.2.2", 24),
             },
@@ -32,7 +32,7 @@ func Measure_gRPC_topo() *model.Topology {
     }
     dev3 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "w2",
+            Name: "tree-worker4",
             Links: []*model.Link{
                 model.NewLink("r1", "00:00:0a:00:00:06", "10.0.3.2", 24),
             },
@@ -42,16 +42,16 @@ func Measure_gRPC_topo() *model.Topology {
         "r3", 
         []*model.Link{
             model.NewLink("r2", "00:00:0a:00:00:07", "10.0.1.2", 24),
-            model.NewLink("w3", "00:00:0a:00:00:08", "10.0.4.1", 24),
-            model.NewLink("w4", "00:00:0a:00:00:09", "10.0.5.1", 24),
-            model.NewLink("w5", "00:00:0a:00:00:0a", "10.0.6.1", 24),
-            model.NewLink("c1", "00:00:0a:00:00:0b", "10.0.7.1", 24),
+            model.NewLink("tree-worker2", "00:00:0a:00:00:08", "10.0.4.1", 24),
+            model.NewLink("tree-worker", "00:00:0a:00:00:09", "10.0.5.1", 24),
+            model.NewLink("tree-worker5", "00:00:0a:00:00:0a", "10.0.6.1", 24),
+            model.NewLink("tree-control-plane", "00:00:0a:00:00:0b", "10.0.7.1", 24),
         },
         "127.0.0.1:9562",
     )
     dev5 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "w3",
+            Name: "tree-worker2",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:0c", "10.0.4.2", 24),
             },
@@ -59,7 +59,7 @@ func Measure_gRPC_topo() *model.Topology {
     }
     dev6 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "w4",
+            Name: "tree-worker",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:0d", "10.0.5.2", 24),
             },
@@ -67,7 +67,7 @@ func Measure_gRPC_topo() *model.Topology {
     }
     dev7 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "w5",
+            Name: "tree-worker5",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:0e", "10.0.6.2", 24),
             },
@@ -75,7 +75,7 @@ func Measure_gRPC_topo() *model.Topology {
     }
     dev8 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "c1",
+            Name: "tree-control-plane",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:0f", "10.0.7.2", 24),
             },

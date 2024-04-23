@@ -276,7 +276,7 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) loadPerDeploymentPods(
 	deployments map[string]*appsv1.Deployment,
 ) (map[string][]v1.Pod, error) {
 	perDeploymentPods := map[string][]v1.Pod{}
-	for _, depl := range deployments {
+	for deplName, depl := range deployments {
 		podSelector, err := metav1.LabelSelectorAsSelector(&metav1.LabelSelector{
 			MatchLabels: depl.Spec.Template.Labels,
 		})
@@ -291,7 +291,7 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) loadPerDeploymentPods(
 		if err := r.List(ctx, pods, listOptions); err != nil {
 			return nil, err
 		}
-		perDeploymentPods[depl.Name] = pods.Items
+		perDeploymentPods[deplName] = pods.Items
 	}
 	return perDeploymentPods, nil
 }
@@ -302,7 +302,15 @@ func createDeploymentForIntdepl(
 	resourceKey types.NamespacedName,
 ) *appsv1.Deployment {
 	depl.Template.Template.Spec.SchedulerName = INTERNAL_TELEMETRY_SCHEDULER_NAME
+	originalLabels := depl.Template.Template.Labels
 	labels := labelsForDeploymentPods(intdepl, depl.Name)
+	for k, v := range originalLabels {
+		if _, ok := labels[k]; ok {
+			// TODO some warning that this may break stuff
+			panic("don't use reserved labels")
+		}
+		labels[k] = v
+	}
 	depl.Template.Template.Labels = labels
 	depl.Template.Selector = &metav1.LabelSelector{
 		MatchLabels: labels,

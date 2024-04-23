@@ -44,7 +44,9 @@ type TelemetryService struct {
 
 	collectionIdPool *CollectionIdPool
 	// key=intentId: str -> value=telemetryEntities: *IntentEntityState
-	intentState sync.Map 
+	intentState sync.Map
+
+	sourceCapabilityMonitor *SourceCapabilityMonitor
 }
 
 func NewService(registry programs.P4ProgramRegistry) *TelemetryService {
@@ -59,6 +61,7 @@ func NewService(registry programs.P4ProgramRegistry) *TelemetryService {
 		configureSourceCounter: newStateCounter(),
 		collectionIdPool: newPool(COLLECTION_ID_POOL_SIZE),
 		intentState: sync.Map{},
+		sourceCapabilityMonitor: newSourceCapabilityMonitor(),
 	}
 }
 
@@ -84,9 +87,10 @@ func (t *TelemetryService) InitDevices(ctx context.Context, topo *model.Topology
 	return nil
 }
 
+// topology should be immutable for the duration of this call, pass snapshot if it could change
 func (t *TelemetryService) ConfigureTelemetry(
 	req *pbt.ConfigureTelemetryRequest,
-	topo *model.Topology,
+	topo *model.Topology, 
 	deviceProvider DeviceProvider,
 ) (*pbt.ConfigureTelemetryResponse, error) {
 	if ok := t.lockIntent(req.IntentId); !ok {
@@ -96,7 +100,6 @@ func (t *TelemetryService) ConfigureTelemetry(
 			Description: &description,
 		}, nil
 	}
-	defer t.unlockIntent(req.IntentId)
 
 	switchIds := getSwitchIds(topo)
 	G := model.TopologyToGraph(topo)
@@ -109,6 +112,7 @@ func (t *TelemetryService) ConfigureTelemetry(
 		if currentIntentState.CollectionId != req.CollectionId {
 			// TODO: support it, not critical though
 			description := "Changing collection id is unsupported"
+			t.unlockIntent(req.IntentId)
 			return &pbt.ConfigureTelemetryResponse{
 				TelemetryState: pbt.TelemetryState_FAILED,
 				Description: &description,
@@ -122,6 +126,11 @@ func (t *TelemetryService) ConfigureTelemetry(
 	collectionid, err := t.collectionIdPool.AllocOrGet(req.IntentId, req.CollectionId)
 	if err != nil {
 		description := "Resources exhausted, use different collection id"
+		if hasCurrentState {
+			t.unlockIntent(req.IntentId)
+		} else {
+			t.deleteIntentLock(req.IntentId)
+		}
 		return &pbt.ConfigureTelemetryResponse{
 			TelemetryState: pbt.TelemetryState_FAILED,
 			Description: &description,
@@ -144,8 +153,11 @@ func (t *TelemetryService) ConfigureTelemetry(
 	}
 	if changelog != nil {
 		if err := t.commit(deviceProvider, changelog); err != nil {
-			if !hasCurrentState {
+			if hasCurrentState {
+				t.unlockIntent(req.IntentId)
+			} else {
 				t.collectionIdPool.Free(req.IntentId, req.CollectionId)
+				t.deleteIntentLock(req.IntentId)
 			}
 			description := "Failed to configure telemetry, couldn't apply some of required changes, retrying may help"
 			return &pbt.ConfigureTelemetryResponse{
@@ -161,6 +173,7 @@ func (t *TelemetryService) ConfigureTelemetry(
 		CollectorPort: int(req.CollectorPort),
 	}
 	t.intentState.Store(req.IntentId, currentIntentState)
+	t.unlockIntent(req.IntentId)
 	return &pbt.ConfigureTelemetryResponse{TelemetryState: pbt.TelemetryState_OK}, nil
 }
 
@@ -200,9 +213,15 @@ func (t *TelemetryService) DisableTelemetry(
 		}
 		t.intentState.Delete(req.IntentId)
 		t.collectionIdPool.Free(req.IntentId, currentIntentState.CollectionId)
+		t.deleteIntentLock(req.IntentId)
 	}()
 	// treat is as a promise that it would be deleted
 	return &pbt.DisableTelemetryResponse{ShouldRetryLater: false}, nil
+}
+
+// to unobserve caller should close the given channel
+func (t *TelemetryService) ObserveSourceCapabilityUpdates(stopChan chan struct{}) chan *pbt.SourceCapabilityUpdate {
+	return t.sourceCapabilityMonitor.RegisterDownstreamObserver(stopChan)
 }
 
 func (t *TelemetryService) getEntriesForTelemetryEntities(
@@ -320,6 +339,7 @@ func (t *TelemetryService) commit(deviceProvider DeviceProvider, changelog *Chan
 			}
 		}
 	}
+	t.sourceCapabilityMonitor.NotifyChanged(t.createCapabilityUpdate())
 	return err
 }
 
@@ -363,6 +383,18 @@ func (t *TelemetryService) makeDeleteChangelog(entries *ConfigEntries) *ChangeLo
 	return changelog
 }
 
+func (t *TelemetryService) createCapabilityUpdate() *pbt.SourceCapabilityUpdate {
+	// TODO: this should be fetched from devices at startup/program installation
+	CAPACITY := 127
+	takenEntries := t.configureSourceCounter.TakePerDeviceNumberOfEntriesSnapshot()
+	for devName, takenCount := range takenEntries {
+		takenEntries[devName] = int32(CAPACITY) - takenCount
+	}
+	return &pbt.SourceCapabilityUpdate{
+		RemainingSourceEndpoints: takenEntries,
+	}
+}
+
 func (t *TelemetryService) lockIntent(intentId string) (success bool) {
 	t.intentMapLock.Lock()
 	defer t.intentMapLock.Unlock()
@@ -397,6 +429,13 @@ func (t *TelemetryService) unlockIntent(intentId string) {
 	t.intentMapLock.Lock()
 	defer t.intentMapLock.Unlock()
 	t.intentLocks[intentId].Unlock()
+}
+
+// intentMapLock MUST NOT be held by the caller and intentLock MUST be held by the caller
+func (t *TelemetryService) deleteIntentLock(intentId string) {
+	t.intentMapLock.Lock()
+	defer t.intentMapLock.Unlock()
+	delete(t.intentLocks, intentId)
 }
 
 func (t *TelemetryService) writeEntry(device device.IncSwitch, entry connector.RawTableEntry) error {

@@ -1,0 +1,10 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: TelemetryResources
+metadata:
+  name: resources
+status:
+  switches:
+    - name: switch1
+      canBeSource: true
+    - name: switch2
+      canBeSource: false

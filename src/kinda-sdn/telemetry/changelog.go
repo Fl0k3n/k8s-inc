@@ -73,9 +73,9 @@ func (c *ChangeLog) AddAction(action *StateChangeAction) {
 	c.actions = append(c.actions, action)
 }
 
-func (c *ChangeLog) Commit(consumer func (action *StateChangeAction) error) error {
+func (c *ChangeLog) Commit(applier func (action *StateChangeAction) error) error {
 	for _, action := range c.actions {
-		err := consumer(action)
+		err := applier(action)
 		if err != nil {
 			return err
 		}
@@ -84,10 +84,10 @@ func (c *ChangeLog) Commit(consumer func (action *StateChangeAction) error) erro
 	return nil
 }
 
-func (c *ChangeLog) Rollback(consumer func (action *StateChangeAction) error) []*StateChangeAction {
+func (c *ChangeLog) Rollback(applier func (action *StateChangeAction) error) []*StateChangeAction {
 	undoFailedActions := []*StateChangeAction{}
 	for i := c.doneCounter; i >= 0; i-- {
-		err := consumer(c.actions[i].Reverse())
+		err := applier(c.actions[i].Reverse())
 		if err != nil {
 			undoFailedActions = append(undoFailedActions, c.actions[i])
 		}

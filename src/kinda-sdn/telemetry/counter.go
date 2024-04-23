@@ -3,6 +3,7 @@ package telemetry
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
 	"github.com/Fl0k3n/k8s-inc/libs/p4-connector/connector"
@@ -16,6 +17,7 @@ type TableState struct {
 type DeviceState struct {
 	lock *sync.Mutex
 	tableState map[MatchIdentifier]TableState
+	numEntries *atomic.Int32
 }
 
 type StateCounter struct {
@@ -29,12 +31,25 @@ func newStateCounter() *StateCounter {
 }
 
 func (s *StateCounter) AddDevice(devName model.DeviceName) {
+	numEntries := &atomic.Int32{}
+	numEntries.Store(0)
 	state := &DeviceState{
 		lock: &sync.Mutex{},
 		tableState: map[MatchIdentifier]TableState{},
+		numEntries: numEntries,
 	}
 	s.deviceState.Store(devName, state)
 }
+
+func (s *StateCounter) TakePerDeviceNumberOfEntriesSnapshot() map[model.DeviceName]int32 {
+	res := map[model.DeviceName]int32{}
+	s.deviceState.Range(func(key, value any) bool {
+		v := value.(*DeviceState)
+		res[key.(model.DeviceName)] = int32(v.numEntries.Load())
+		return true
+	})
+	return res
+} 
 
 // counter is incremented and runnable is run atomically if counter was 0 prior to this call
 // lock is released once runnable returns, if new goroutines are created and not awaited their
@@ -57,6 +72,7 @@ func (s *StateCounter) IncrementAndRunOnTransitionToOne(
 	if !ok {
 		tableState.counter = 0
 		tableState.entry = val
+		state.numEntries.Add(1)
 	}
 	if tableState.counter == 0 {
 		if err := runnable(); err != nil {
@@ -88,6 +104,7 @@ func (s *StateCounter) DecrementAndRunOnTransitionToZero(
 		if err := runnable(tableState.entry); err != nil {
 			return err	
 		}
+		state.numEntries.Add(-1)
 		delete(state.tableState, key.ToIdentifier())
 	} else {
 		tableState.counter--
