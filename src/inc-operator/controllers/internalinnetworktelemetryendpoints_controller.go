@@ -224,7 +224,7 @@ func (r *InternalInNetworkTelemetryEndpointsReconciler) sendConfigureTelemetryRe
 		IntentId: utils.BuildInternalIntentId(endpoints.Name, sourceDepl, targetDepl),
 		CollectionId: utils.BuildInternalCollectionId(endpoints.Name),
 		CollectorNodeName: collector.Status.NodeRef.Name,
-		CollectorPort: *collector.Status.Port,
+		CollectorPort: *collector.Status.ReportingPort,
 		Sources: &pbt.ConfigureTelemetryRequest_TunneledSources{
 			TunneledSources: &pbt.TunneledTelemetryEntities{
 				DeviceNamesWithEntities: perDeplEntities[sourceDepl],	

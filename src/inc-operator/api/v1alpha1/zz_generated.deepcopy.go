@@ -117,9 +117,14 @@ func (in *CollectorStatus) DeepCopyInto(out *CollectorStatus) {
 		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
-	if in.Port != nil {
-		in, out := &in.Port, &out.Port
+	if in.ReportingPort != nil {
+		in, out := &in.ReportingPort, &out.ReportingPort
 		*out = new(int32)
+		**out = **in
+	}
+	if in.ApiServiceRef != nil {
+		in, out := &in.ApiServiceRef, &out.ApiServiceRef
+		*out = new(corev1.LocalObjectReference)
 		**out = **in
 	}
 }

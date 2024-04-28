@@ -10,6 +10,7 @@ rules:
       - incswitches
       - p4programs
       - internalinnetworktelemetrydeployments
+      - telemetrydeviceresources
     verbs:
       - get
       - list

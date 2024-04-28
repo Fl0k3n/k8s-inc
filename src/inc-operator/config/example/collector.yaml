@@ -3,15 +3,31 @@ kind: Collector
 metadata:
   name: collector
 spec:
+  reportingContainerPort: 6000
+  apiContainerPort: 8000
   podSpec:
-    nodeName: tree-worker
+    nodeName: tree-worker5
     containers:
       - name: nodeapp
-        image: flok3n/int-collector:1.0.2
+        image: flok3n/int-collector:1.0.3
         command:
-          ["python3", "/app/server.py", "-i", "6000", "-o", "/logs/reports.csv"]
+          [
+            "python3",
+            "/app/collector.py",
+            "-i",
+            "6000",
+            "-p",
+            "8000",
+            "-w",
+            "3000",
+            "-o",
+            "/logs/reports.csv",
+          ]
         ports:
           - containerPort: 6000
+            protocol: UDP
+          - containerPort: 8000
+            protocol: TCP
         volumeMounts:
           - name: logs-dir
             mountPath: /logs

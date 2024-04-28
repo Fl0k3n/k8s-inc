@@ -35,9 +35,11 @@ spec:
           spec:
             description: CollectorSpec defines the desired state of Collector
             properties:
+              apiContainerPort:
+                format: int32
+                type: integer
               podSpec:
-                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-                  Important: Run "make" to regenerate code after modifying this file'
+                description: PodSpec is a description of a pod.
                 properties:
                   activeDeadlineSeconds:
                     description: Optional duration in seconds the pod may be active
@@ -7135,12 +7137,29 @@ spec:
                 required:
                 - containers
                 type: object
+              reportingContainerPort:
+                description: 'INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
+                  Important: Run "make" to regenerate code after modifying this file'
+                format: int32
+                type: integer
             required:
+            - apiContainerPort
             - podSpec
+            - reportingContainerPort
             type: object
           status:
             description: CollectorStatus defines the observed state of Collector
             properties:
+              apiServiceRef:
+                description: LocalObjectReference contains enough information to let
+                  you locate the referenced object inside the same namespace.
+                properties:
+                  name:
+                    description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                      TODO: Add other useful fields. apiVersion, kind, uid?'
+                    type: string
+                type: object
+                x-kubernetes-map-type: atomic
               conditions:
                 description: Conditions store the status conditions of the Memcached
                   instances
@@ -7221,7 +7240,7 @@ spec:
                     type: string
                 type: object
                 x-kubernetes-map-type: atomic
-              port:
+              reportingPort:
                 format: int32
                 type: integer
             type: object

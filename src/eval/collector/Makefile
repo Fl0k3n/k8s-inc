@@ -1,5 +1,5 @@
 
-IMAGE=flok3n/int-collector:1.0.2
+IMAGE=flok3n/int-collector:1.0.3
 
 .PHONY: docker
 docker:
@@ -8,4 +8,4 @@ docker:
 
 .PHONY: run
 run:
-	python server.py
+	python collector.py

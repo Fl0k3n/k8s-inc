@@ -108,7 +108,7 @@ func (r *CollectorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 	}
 
 	collectorService := &v1.Service{}
-	if err := r.Get(ctx, req.NamespacedName, collectorService); err != nil {
+	if err := r.Get(ctx, objectKeyForNodePortService(collector), collectorService); err != nil {
 		if apierrors.IsNotFound(err) {
 			log.Info(fmt.Sprintf("Service for collector %s not found, creating", collector.Name))
 			collectorService = r.createNodePortServiceForCollector(collector)
@@ -118,6 +118,25 @@ func (r *CollectorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 			}
 			if err := r.Create(ctx, collectorService); err != nil {
 				log.Error(err, "Failed to create service")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+		log.Error(err, "Failed to get service")
+		return ctrl.Result{}, err
+	}
+
+	collectorApiService := &v1.Service{}
+	if err := r.Get(ctx, objectKeyForApiService(collector), collectorApiService); err != nil {
+		if apierrors.IsNotFound(err) {
+			log.Info(fmt.Sprintf("Service for collector API %s not found, creating", collector.Name))
+			collectorApiService = r.createClusterIpServiceForCollectorAPI(collector)
+			if err := ctrl.SetControllerReference(collector, collectorApiService, r.Scheme); err != nil {
+				log.Error(err, "Failed to set controller reference to service for collector API")
+				return ctrl.Result{}, err
+			}
+			if err := r.Create(ctx, collectorApiService); err != nil {
+				log.Error(err, "Failed to create service for collector API")
 				return ctrl.Result{}, err
 			}
 			return ctrl.Result{Requeue: true}, nil
@@ -148,16 +167,18 @@ func (r *CollectorReconciler) Reconcile(ctx context.Context, req ctrl.Request) (
 		}
 	}
 
-	collector.Status.Port = nil
-	// if collectorService.Status.Conditions
+	collector.Status.ReportingPort = nil
 	if len(collectorService.Spec.Ports) > 0 {
 		nodePort := collectorService.Spec.Ports[0].NodePort
 		if nodePort != 0 {
-			collector.Status.Port = &nodePort
+			collector.Status.ReportingPort = &nodePort
 		} 
 	}
+	collector.Status.ApiServiceRef = &v1.LocalObjectReference{
+		Name: collectorApiService.Name,
+	}
 
-	if collector.Status.NodeRef != nil && collector.Status.Port != nil {
+	if collector.Status.NodeRef != nil && collector.Status.ReportingPort != nil {
 		meta.SetStatusCondition(&collector.Status.Conditions, metav1.Condition{
 			Type: incv1alpha1.TypeAvailableCollector,
 			Status: metav1.ConditionTrue,
@@ -205,11 +226,12 @@ func (r *CollectorReconciler) createDaemonSetForCollector(collector *incv1alpha1
 }
 
 func (r *CollectorReconciler) createNodePortServiceForCollector(collector *incv1alpha1.Collector) *v1.Service {
-	labels := labelsForCollector(collector)	
+	labels := labelsForCollector(collector)
+	key := objectKeyForNodePortService(collector)
 	return &v1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: collector.Name,
-			Namespace: collector.Namespace,
+			Name: key.Name,
+			Namespace: key.Namespace,
 		},
 		Spec: v1.ServiceSpec{
 			Selector: labels,
@@ -217,10 +239,43 @@ func (r *CollectorReconciler) createNodePortServiceForCollector(collector *incv1
 			Ports: []v1.ServicePort{
 				{
 					Protocol: v1.ProtocolUDP,
-					Port: collector.Spec.PodSpec.Containers[0].Ports[0].ContainerPort,
+					Port: collector.Spec.ReportingContainerPort,
 				},
 			},
 		},
+	}
+}
+
+func (r *CollectorReconciler) createClusterIpServiceForCollectorAPI(collector *incv1alpha1.Collector) *v1.Service {
+	labels := labelsForCollector(collector)
+	key := objectKeyForApiService(collector)
+	return &v1.Service{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: key.Name,
+			Namespace: key.Namespace,
+		},
+		Spec: v1.ServiceSpec{
+			Selector: labels,
+			Type: v1.ServiceTypeClusterIP,
+			Ports: []v1.ServicePort{
+				{
+					Protocol: v1.ProtocolTCP,
+					Port: collector.Spec.ApiContainerPort,
+				},
+			},
+		},
+	}
+}
+
+func objectKeyForNodePortService(collector *incv1alpha1.Collector) client.ObjectKey {
+	return client.ObjectKeyFromObject(collector)
+}
+
+
+func objectKeyForApiService(collector *incv1alpha1.Collector) client.ObjectKey {
+	return client.ObjectKey{
+		Name: collector.Name + "-api-service",
+		Namespace: collector.Namespace,
 	}
 }
 
