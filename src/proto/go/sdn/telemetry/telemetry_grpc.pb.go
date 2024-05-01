@@ -26,6 +26,7 @@ type TelemetryServiceClient interface {
 	ConfigureTelemetry(ctx context.Context, in *ConfigureTelemetryRequest, opts ...grpc.CallOption) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(ctx context.Context, in *DisableTelemetryRequest, opts ...grpc.CallOption) (*DisableTelemetryResponse, error)
 	SubscribeSourceCapabilities(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (TelemetryService_SubscribeSourceCapabilitiesClient, error)
+	GetCollectionId(ctx context.Context, in *GetCollectionIdRequest, opts ...grpc.CallOption) (*GetCollectionIdResponse, error)
 }
 
 type telemetryServiceClient struct {
@@ -86,6 +87,15 @@ func (x *telemetryServiceSubscribeSourceCapabilitiesClient) Recv() (*SourceCapab
 	return m, nil
 }
 
+func (c *telemetryServiceClient) GetCollectionId(ctx context.Context, in *GetCollectionIdRequest, opts ...grpc.CallOption) (*GetCollectionIdResponse, error) {
+	out := new(GetCollectionIdResponse)
+	err := c.cc.Invoke(ctx, "/telemetry.TelemetryService/GetCollectionId", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // TelemetryServiceServer is the server API for TelemetryService service.
 // All implementations must embed UnimplementedTelemetryServiceServer
 // for forward compatibility
@@ -93,6 +103,7 @@ type TelemetryServiceServer interface {
 	ConfigureTelemetry(context.Context, *ConfigureTelemetryRequest) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error)
 	SubscribeSourceCapabilities(*empty.Empty, TelemetryService_SubscribeSourceCapabilitiesServer) error
+	GetCollectionId(context.Context, *GetCollectionIdRequest) (*GetCollectionIdResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()
 }
 
@@ -108,6 +119,9 @@ func (UnimplementedTelemetryServiceServer) DisableTelemetry(context.Context, *Di
 }
 func (UnimplementedTelemetryServiceServer) SubscribeSourceCapabilities(*empty.Empty, TelemetryService_SubscribeSourceCapabilitiesServer) error {
 	return status.Errorf(codes.Unimplemented, "method SubscribeSourceCapabilities not implemented")
+}
+func (UnimplementedTelemetryServiceServer) GetCollectionId(context.Context, *GetCollectionIdRequest) (*GetCollectionIdResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCollectionId not implemented")
 }
 func (UnimplementedTelemetryServiceServer) mustEmbedUnimplementedTelemetryServiceServer() {}
 
@@ -179,6 +193,24 @@ func (x *telemetryServiceSubscribeSourceCapabilitiesServer) Send(m *SourceCapabi
 	return x.ServerStream.SendMsg(m)
 }
 
+func _TelemetryService_GetCollectionId_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCollectionIdRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(TelemetryServiceServer).GetCollectionId(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/telemetry.TelemetryService/GetCollectionId",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(TelemetryServiceServer).GetCollectionId(ctx, req.(*GetCollectionIdRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // TelemetryService_ServiceDesc is the grpc.ServiceDesc for TelemetryService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -193,6 +225,10 @@ var TelemetryService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DisableTelemetry",
 			Handler:    _TelemetryService_DisableTelemetry_Handler,
+		},
+		{
+			MethodName: "GetCollectionId",
+			Handler:    _TelemetryService_GetCollectionId_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

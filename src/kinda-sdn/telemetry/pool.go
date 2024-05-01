@@ -9,7 +9,7 @@ import (
 type poolItem struct {
 	itemLock *sync.Mutex
 	collectionId string
-	intents map[string]struct{} // key is indentId
+	intents map[string]struct{} // key is intentId
 }
 
 type CollectionIdPool struct {
@@ -77,6 +77,19 @@ func (p *CollectionIdPool) GetIfAllocated(intentId string, collectionId string) 
 	for i := 0; i < p.maxSize; i++ {
 		p.pool[i].itemLock.Lock()
 		_, owned := p.pool[i].intents[intentId]
+		if owned && p.pool[i].collectionId == collectionId {
+			p.pool[i].itemLock.Unlock()
+			return i, true
+		}
+		p.pool[i].itemLock.Unlock()
+	}
+	return -1, false
+}
+
+func (p *CollectionIdPool) GetIfAnyAllocated(collectionId string) (int, bool) {
+	for i := 0; i < p.maxSize; i++ {
+		p.pool[i].itemLock.Lock()
+		owned := len(p.pool[i].intents) > 0
 		if owned && p.pool[i].collectionId == collectionId {
 			p.pool[i].itemLock.Unlock()
 			return i, true

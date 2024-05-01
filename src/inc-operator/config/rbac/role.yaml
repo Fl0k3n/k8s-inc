@@ -306,6 +306,32 @@ rules:
 - apiGroups:
   - inc.kntp.com
   resources:
+  - telemetrycollectionstats
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - telemetrycollectionstats/finalizers
+  verbs:
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
+  - telemetrycollectionstats/status
+  verbs:
+  - get
+  - patch
+  - update
+- apiGroups:
+  - inc.kntp.com
+  resources:
   - telemetrydeviceresources
   verbs:
   - create

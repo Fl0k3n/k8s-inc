@@ -222,7 +222,7 @@ func (r *InternalInNetworkTelemetryEndpointsReconciler) sendConfigureTelemetryRe
 ) (*pbt.ConfigureTelemetryResponse, error) {
 	req := &pbt.ConfigureTelemetryRequest{
 		IntentId: utils.BuildInternalIntentId(endpoints.Name, sourceDepl, targetDepl),
-		CollectionId: utils.BuildInternalCollectionId(endpoints.Name),
+		CollectionId: endpoints.Spec.CollectionId,
 		CollectorNodeName: collector.Status.NodeRef.Name,
 		CollectorPort: *collector.Status.ReportingPort,
 		Sources: &pbt.ConfigureTelemetryRequest_TunneledSources{

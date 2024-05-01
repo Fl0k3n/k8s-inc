@@ -35,6 +35,7 @@ import (
 
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1"
 	"github.com/Fl0k3n/k8s-inc/inc-operator/controllers"
+	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -92,6 +93,9 @@ func main() {
 		setupLog.Error(err, "unable to start manager")
 		os.Exit(1)
 	}
+	
+	sdnConnector := shimutils.NewTelemetryPluginConnector(mgr.GetClient())
+	defer sdnConnector.Close()
 
 	if err = (&controllers.ExternalInNetworkTelemetryDeploymentReconciler{
 		Client: mgr.GetClient(),
@@ -133,6 +137,14 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TelemetryDeviceResources")
+		os.Exit(1)
+	}
+	if err = (&controllers.TelemetryCollectionStatsReconciler{
+		Client: mgr.GetClient(),
+		Connector: sdnConnector,
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "TelemetryCollectionStats")
 		os.Exit(1)
 	}
 	//+kubebuilder:scaffold:builder

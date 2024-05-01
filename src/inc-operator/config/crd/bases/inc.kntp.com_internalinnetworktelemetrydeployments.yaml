@@ -37,6 +37,8 @@ spec:
             description: InternalInNetworkTelemetryDeploymentSpec defines the desired
               state of InternalInNetworkTelemetryDeployment
             properties:
+              collectionId:
+                type: string
               collectorRef:
                 description: LocalObjectReference contains enough information to let
                   you locate the referenced object inside the same namespace.
@@ -8685,6 +8687,7 @@ spec:
                   type: object
                 type: array
             required:
+            - collectionId
             - collectorRef
             - deployments
             type: object

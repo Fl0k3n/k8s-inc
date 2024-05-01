@@ -6,4 +6,5 @@ resources:
 - inc_v1alpha1_internalinnetworktelemetryendpoints.yaml
 - inc_v1alpha1_collector.yaml
 - inc_v1alpha1_telemetrydeviceresources.yaml
+- inc_v1alpha1_telemetrycollectionstats.yaml
 #+kubebuilder:scaffold:manifestskustomizesamples

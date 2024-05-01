@@ -3,10 +3,10 @@ kind: Collector
 metadata:
   name: collector
 spec:
-  reportingContainerPort: 6000
   apiContainerPort: 8000
+  reportingContainerPort: 6000
   podSpec:
-    nodeName: tree-worker5
+    nodeName: tree-worker3
     containers:
       - name: nodeapp
         image: flok3n/int-collector:1.0.3
@@ -19,7 +19,7 @@ spec:
             "-p",
             "8000",
             "-w",
-            "3000",
+            "30",
             "-o",
             "/logs/reports.csv",
           ]

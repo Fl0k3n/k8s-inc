@@ -242,6 +242,7 @@ func (r *InternalInNetworkTelemetryDeploymentReconciler) Reconcile(ctx context.C
 				Spec: incv1alpha1.InternalInNetworkTelemetryEndpointsSpec{
 					DeploymentEndpoints: entries,
 					CollectorRef: intdepl.Spec.CollectorRef,
+					CollectionId: intdepl.Spec.CollectionId,
 				},
 			}
 			if err := controllerutil.SetControllerReference(intdepl, eps, r.Scheme); err != nil {

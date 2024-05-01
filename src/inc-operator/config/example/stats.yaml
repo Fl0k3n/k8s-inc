@@ -1,0 +1,9 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: TelemetryCollectionStats
+metadata:
+  name: stats
+spec:
+  collectorRef:
+    name: collector
+  collectionId: main-collection
+  refreshPeriodMillis: 2000

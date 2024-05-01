@@ -5,6 +5,7 @@ metadata:
 spec:
   collectorRef:
     name: collector
+  collectionId: main-collection
   deployments:
     - name: receiver
       template:

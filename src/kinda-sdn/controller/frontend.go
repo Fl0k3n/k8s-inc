@@ -81,3 +81,12 @@ func (m *KindaSdn) SubscribeSourceCapabilities(_ *empty.Empty, respStream pbt.Te
 	}
 	return nil
 }
+
+func (m *KindaSdn) GetCollectionId(ctx context.Context, req *pbt.GetCollectionIdRequest) (*pbt.GetCollectionIdResponse, error) {
+	if collectionIdNum, ok := m.telemetryService.GetCollectionIdNum(req.CollectionId); ok {
+		return &pbt.GetCollectionIdResponse{
+			CollectionId: int32(collectionIdNum),
+		}, nil
+	}
+	return nil, status.Errorf(codes.NotFound, "collectionId not found")
+}
