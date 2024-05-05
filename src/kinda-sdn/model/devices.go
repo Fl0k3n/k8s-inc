@@ -111,8 +111,8 @@ func NewIncSwitch(name DeviceName, links []*Link, arch IncSwitchArch,
 	}
 }
 
-func NewBmv2IncSwitch(name DeviceName, links []*Link, grpcUrl string) *IncSwitch {
-	return NewIncSwitch(name, links, BMv2, grpcUrl, NO_PROGRAM, true)
+func NewBmv2IncSwitch(name DeviceName, links []*Link, grpcUrl string, program string) *IncSwitch {
+	return NewIncSwitch(name, links, BMv2, grpcUrl, program, true)
 }
 
 func (i *IncSwitch) GetType() DeviceType {

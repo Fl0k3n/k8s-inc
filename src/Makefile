@@ -2,6 +2,7 @@
 SCHED_DIR=/home/flok3n/go/src/sigs.k8s.io/scheduler-plugins
 SCHED_INT_CRD_DIR=$(SCHED_DIR)/pkg/intv1alpha
 SCHED_SHIM_CRD_DIR=$(SCHED_DIR)/pkg/shimv1alpha
+SCHED_MANIFESTS_DIR=$(SCHED_DIR)/manifests/crds
 
 .PHONY: copy-crds-to-sched
 copy-crds-to-sched:
@@ -9,6 +10,9 @@ copy-crds-to-sched:
 	cp ./inc-operator/api/v1alpha1/* $(SCHED_INT_CRD_DIR)
 	rm $(SCHED_SHIM_CRD_DIR)/*
 	cp ./sdn-shim/api/v1alpha1/* $(SCHED_SHIM_CRD_DIR)
+	find $(SCHED_MANIFESTS_DIR) -type f -name 'inc.kntp.com*' -exec rm {} \;
+	cp ./sdn-shim/config/crd/bases/* $(SCHED_MANIFESTS_DIR)
+	cp ./inc-operator/config/crd/bases/* $(SCHED_MANIFESTS_DIR)
 
 .PHONY: start-shim
 start-shim:

@@ -44,7 +44,11 @@ func (k *KindaSdn) Close() {
 	}
 }
 
-func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch, programDetails *model.P4ProgramDetails) error {
+func (k *KindaSdn) bootstrapSwitch(incSwitch *model.IncSwitch) error {
+	programDetails, ok := k.programRegistry.Lookup(incSwitch.InstalledProgram)
+	if !ok {
+		return fmt.Errorf("program %s not registered but required on device %s", incSwitch.InstalledProgram, incSwitch.Name)
+	}
 	ctx := context.Background()
 	if incSwitch.Arch != model.BMv2 {
 		panic("must be bmv2")
@@ -77,15 +81,11 @@ func (k *KindaSdn) writeInitialEntriesToBmv2Switches(entries map[model.DeviceNam
 	return nil
 }
 
-func (k *KindaSdn) InitTopology(setupL3Forwarding bool, programName string) error {
-	details, ok := k.programRegistry.Lookup(programName)
-	if !ok {
-		return fmt.Errorf("default program %s is unregistered", programName)
-	}
+func (k *KindaSdn) InitTopology(setupL3Forwarding bool) error {
 	entries := k.initialP4Config
 	for _, dev := range k.topo.Devices {
 		if dev.GetType() == model.INC_SWITCH {
-			if err := k.bootstrapSwitch(dev.(*model.IncSwitch), &details); err != nil {
+			if err := k.bootstrapSwitch(dev.(*model.IncSwitch)); err != nil {
 				fmt.Printf("Failed to write entries for switch %s\n", dev.GetName())
 				return err
 			}

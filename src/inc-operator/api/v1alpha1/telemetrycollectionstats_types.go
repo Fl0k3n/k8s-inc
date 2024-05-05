@@ -49,7 +49,7 @@ type Metrics struct {
 	NumberCollectedReports int `json:"collectedReports"`
 	AveragePathLatencyMicroS int `json:"averagePathLatencyMicroS"`
 	OnePercentileSlowestPathLatencyMicroS int `json:"onePercentileSlowestPathLatencyMicroS"`
-	DeviceMetrics SwitchMetrics `json:"deviceMetrics"`
+	DeviceMetrics []SwitchMetrics `json:"deviceMetrics"`
 }
 
 type MetricsSummary struct {
@@ -61,7 +61,6 @@ type MetricsSummary struct {
 // TelemetryCollectionStatsStatus defines the observed state of TelemetryCollectionStats
 type TelemetryCollectionStatsStatus struct {
 	MetricsSummary *MetricsSummary `json:"summary,omitempty"`
-	RawStats *string `json:"rawStats,omitempty"`
 }
 
 //+kubebuilder:object:root=true

@@ -60,8 +60,6 @@ spec:
             description: TelemetryCollectionStatsStatus defines the observed state
               of TelemetryCollectionStats
             properties:
-              rawStats:
-                type: string
               summary:
                 properties:
                   timeWindowsSeconds:
@@ -75,37 +73,39 @@ spec:
                       collectedReports:
                         type: integer
                       deviceMetrics:
-                        properties:
-                          deviceName:
-                            type: string
-                          portMetrics:
-                            items:
-                              properties:
-                                averageLatencyMicroS:
-                                  type: integer
-                                averageQueueFillState:
-                                  type: integer
-                                onePercentileLargestQueueFillState:
-                                  type: integer
-                                onePercentileSlowestLatencyMicroS:
-                                  type: integer
-                                packets:
-                                  type: integer
-                                toDevice:
-                                  type: string
-                              required:
-                              - averageLatencyMicroS
-                              - averageQueueFillState
-                              - onePercentileLargestQueueFillState
-                              - onePercentileSlowestLatencyMicroS
-                              - packets
-                              - toDevice
-                              type: object
-                            type: array
-                        required:
-                        - deviceName
-                        - portMetrics
-                        type: object
+                        items:
+                          properties:
+                            deviceName:
+                              type: string
+                            portMetrics:
+                              items:
+                                properties:
+                                  averageLatencyMicroS:
+                                    type: integer
+                                  averageQueueFillState:
+                                    type: integer
+                                  onePercentileLargestQueueFillState:
+                                    type: integer
+                                  onePercentileSlowestLatencyMicroS:
+                                    type: integer
+                                  packets:
+                                    type: integer
+                                  toDevice:
+                                    type: string
+                                required:
+                                - averageLatencyMicroS
+                                - averageQueueFillState
+                                - onePercentileLargestQueueFillState
+                                - onePercentileSlowestLatencyMicroS
+                                - packets
+                                - toDevice
+                                type: object
+                              type: array
+                          required:
+                          - deviceName
+                          - portMetrics
+                          type: object
+                        type: array
                       onePercentileSlowestPathLatencyMicroS:
                         type: integer
                     required:

@@ -79,8 +79,7 @@ def sender():
                     dropped_repeated_or_out_of_order += j
                     msgs = msgs[j:]
                     s_id_, snd_time = msgs[0]
-                else:
-                    msgs.pop(0)
+                msgs.pop(0)
                 latency = (rcv_time - snd_time) / 2
                 latencies.append(latency)
                 print(f'lat: {latency}s\tdropped_ish: {dropped_repeated_or_out_of_order}')

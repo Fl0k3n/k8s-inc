@@ -134,6 +134,7 @@ func main() {
 	}
 	if err = (&controllers.TelemetryDeviceResourcesReconciler{
 		Client: mgr.GetClient(),
+		Connector: sdnConnector,
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "TelemetryDeviceResources")

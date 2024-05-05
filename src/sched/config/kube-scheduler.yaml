@@ -48,6 +48,8 @@ spec:
         - mountPath: /etc/kubernetes/kube-scheduler-conf.yaml
           name: kubeschedulerconf
           readOnly: true
+        - mountPath: /profiling
+          name: profiling
   hostNetwork: true
   priorityClassName: system-node-critical
   securityContext:
@@ -62,3 +64,7 @@ spec:
         path: /etc/kubernetes/kube-scheduler-conf.yaml
         type: File
       name: kubeschedulerconf
+    - hostPath:
+        path: /profiling
+        type: DirectoryOrCreate
+      name: profiling

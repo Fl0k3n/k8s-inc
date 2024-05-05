@@ -1,0 +1,77 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: InternalInNetworkTelemetryDeployment
+metadata:
+  name: intdepl-latency-udp
+spec:
+  collectorRef:
+    name: collector
+  collectionId: main-collection
+  deployments:
+    - name: receiver
+      template:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: receiver-udp
+        template:
+          metadata:
+            labels:
+              app: receiver-udp
+          spec:
+            terminationGracePeriodSeconds: 0
+            containers:
+              - name: receiver
+                image: flok3n/latency_receiver_udp:1.0.2
+                command: ["python3", "/latency_receiver.py", "8901", "950"]
+                ports:
+                  - containerPort: 8901
+                    protocol: UDP
+    - name: sender
+      template:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: snd
+        template:
+          metadata:
+            labels:
+              app: snd
+          spec:
+            terminationGracePeriodSeconds: 1
+            containers:
+              - name: sender
+                image: flok3n/latency_sender_udp:1.0.2
+                imagePullPolicy: Always
+                command:
+                  [
+                    "python3",
+                    "/latency_sender.py",
+                    "latency-receiver-udp.default.svc.cluster.local",
+                    "8901",
+                    "8900",
+                    "/logs/latency_udp.csv",
+                    "950",
+                    "20",
+                  ]
+                ports:
+                  - containerPort: 8900
+                    protocol: UDP
+                volumeMounts:
+                  - name: logs-dir
+                    mountPath: /logs
+            volumes:
+              - name: logs-dir
+                hostPath:
+                  path: /logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: latency-receiver-udp
+spec:
+  selector:
+    app: receiver-udp
+  ports:
+    - protocol: UDP
+      port: 8901
+      targetPort: 8901

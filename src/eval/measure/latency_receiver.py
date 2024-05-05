@@ -5,7 +5,7 @@ ID_SIZE = 8
 extra_payload_size = 0
 
 if len(sys.argv) < 2:
-    print('usage: python latency_rcvr.py PORT [PAYLOAD_SIZE]')
+    print('usage: python latency_receiver.py PORT [PAYLOAD_SIZE]')
     exit(1)
 
 src_port = int(sys.argv[1])

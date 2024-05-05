@@ -9,7 +9,10 @@ package telemetry;
 service TelemetryService {
     rpc ConfigureTelemetry(ConfigureTelemetryRequest) returns (ConfigureTelemetryResponse) {}
     rpc DisableTelemetry(DisableTelemetryRequest) returns (DisableTelemetryResponse) {}
+
     rpc SubscribeSourceCapabilities(google.protobuf.Empty) returns (stream SourceCapabilityUpdate) {}
+
+    // for metric display purposes
     rpc GetCollectionId(GetCollectionIdRequest) returns (GetCollectionIdResponse) {}
 }
 
@@ -80,3 +83,8 @@ message GetCollectionIdRequest {
 message GetCollectionIdResponse {
     int32 collectionId = 1;
 }
+
+message DevicePortMapping {
+    map<int32, string> portIdentifierToPeerName = 1;
+}
+

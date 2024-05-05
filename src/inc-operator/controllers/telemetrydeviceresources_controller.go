@@ -22,8 +22,6 @@ import (
 	"io"
 	"time"
 
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/protobuf/types/known/emptypb"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -33,7 +31,6 @@ import (
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/inc-operator/api/v1alpha1"
 	"github.com/Fl0k3n/k8s-inc/inc-operator/shimutils"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
-	shimv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
 	"github.com/go-logr/logr"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -47,6 +44,7 @@ const UPDATE_STATUS_ATTEMPTS = 3
 type TelemetryDeviceResourcesReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	Connector *shimutils.TelemetryPluginConnector
 }
 
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=telemetrydeviceresources,verbs=get;list;watch;create;update;patch;delete
@@ -56,9 +54,11 @@ type TelemetryDeviceResourcesReconciler struct {
 // returns error if creation (and fetch) failed
 func (r *TelemetryDeviceResourcesReconciler) getOrCreateResources(
 	ctx context.Context,
-	shim *shimv1alpha1.SDNShim,
 ) (*incv1alpha1.TelemetryDeviceResources, error) {
-	resourceKey := types.NamespacedName{Name: CLUSTER_TELEMETRY_DEVICE_RESOURCES_NAME, Namespace: shim.Namespace}
+	resourceKey := types.NamespacedName{
+		Name: CLUSTER_TELEMETRY_DEVICE_RESOURCES_NAME,
+		Namespace: r.Connector.GetNamespace(),
+	}
 	res := &incv1alpha1.TelemetryDeviceResources{}
 	err := r.Get(ctx, resourceKey, res)
 	if err == nil {
@@ -85,7 +85,6 @@ func (r *TelemetryDeviceResourcesReconciler) getOrCreateResources(
 
 func (r *TelemetryDeviceResourcesReconciler) updateStatus(
 	ctx context.Context,
-	shim *shimv1alpha1.SDNShim,
 	update *pbt.SourceCapabilityUpdate,
 ) error {
 	res := []incv1alpha1.TelemetryDeviceResource{}
@@ -97,7 +96,7 @@ func (r *TelemetryDeviceResourcesReconciler) updateStatus(
 	}
 	var err error = nil
 	for i := 0; i < UPDATE_STATUS_ATTEMPTS; i++ {
-		resources, er := r.getOrCreateResources(ctx, shim)
+		resources, er := r.getOrCreateResources(ctx)
 		if er != nil {
 			return er
 		}
@@ -118,26 +117,14 @@ func (r *TelemetryDeviceResourcesReconciler) updateStatus(
 
 func (r *TelemetryDeviceResourcesReconciler) watchTelemetryUpdates(log logr.Logger) {
 	for {
-		var conn *grpc.ClientConn = nil
 		var err error
-		var client pbt.TelemetryServiceClient
 		var stream pbt.TelemetryService_SubscribeSourceCapabilitiesClient = nil
-		var grpcAddr string
 
 		ctx := context.Background()
-		shim, err := shimutils.LoadSDNShim(ctx, r.Client)
-		if err != nil {
-			log.Info("SDN shim unavailable")
-			goto retry
-		}
-		grpcAddr = shim.Spec.SdnConfig.TelemetryServiceGrpcAddr
-		conn, err = grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
-		if err != nil {
-			log.Info(fmt.Sprintf("Failed to connect to SDN telemetry plugin %e", err))
-			goto retry
-		}
-		client = pbt.NewTelemetryServiceClient(conn)
-		stream, err = client.SubscribeSourceCapabilities(ctx, &emptypb.Empty{})
+		err = r.Connector.WithTelemetryClient(func(client pbt.TelemetryServiceClient) error {
+			stream, err = client.SubscribeSourceCapabilities(ctx, &emptypb.Empty{})
+			return err
+		})
 		if err != nil {
 			log.Info(fmt.Sprintf("Failed to watch resource updates %e", err))
 			goto retry
@@ -153,15 +140,12 @@ func (r *TelemetryDeviceResourcesReconciler) watchTelemetryUpdates(log logr.Logg
 				log.Error(err, "Recv failed")
 				goto retry
 			}
-			if err := r.updateStatus(ctx, shim, update); err != nil {
+			if err := r.updateStatus(ctx, update); err != nil {
 				log.Error(err, "Failed to update resource status")
 				goto retry
 			}
 		}
 	retry:
-		if conn != nil {
-			conn.Close()
-		}
 		time.Sleep(5 * time.Second)
 	}
 }

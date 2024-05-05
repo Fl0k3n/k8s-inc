@@ -91,3 +91,15 @@ func GetDeviceNames(devices []shimv1alpha1.NetworkDevice) []string {
 	}
 	return res
 }
+
+func GetSwitchIdToNameMapping(topo *shimv1alpha1.Topology) map[int]string {
+	res := map[int]string{}
+	i := 0
+	for _, dev := range topo.Spec.Graph {
+		if dev.DeviceType == shimv1alpha1.INC_SWITCH {
+			res[i] = dev.Name
+			i++
+		}
+	}
+	return res
+}

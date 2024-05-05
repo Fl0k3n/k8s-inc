@@ -1,3 +1,4 @@
+from io import TextIOWrapper
 import socket
 import sys
 import threading
@@ -9,18 +10,19 @@ period_millis = 100
 extra_payload_size = 0
 
 if len(sys.argv) < 3:
-    print('usage: python latency_sender.py DEST_IPV4 DEST_PORT SRC_PORT [PAYLOAD_SIZE] [PERIOD_MILLIS]')
+    print('usage: python latency_sender.py DEST_IPV4 DEST_PORT SRC_PORT LOG_PATH [PAYLOAD_SIZE] [PERIOD_MILLIS]')
     exit(1)
 
 dest_ip = sys.argv[1]
 dest_port = int(sys.argv[2])
 src_port = int(sys.argv[3])
-
-if len(sys.argv) > 4:
-    extra_payload_size = int(sys.argv[4])
+log_path = sys.argv[4]
 
 if len(sys.argv) > 5:
-    period_millis = int(sys.argv[5])
+    extra_payload_size = int(sys.argv[5])
+
+if len(sys.argv) > 6:
+    period_millis = int(sys.argv[6])
 
 
 print(f'sender: to {dest_ip}:{dest_port}, payload size: {extra_payload_size}, period: {period_millis}ms')
@@ -40,7 +42,7 @@ def receiver():
         id_ = int(resp[:ID_SIZE].decode().strip())
         q.put((id_, now)) 
 
-def sender():
+def sender(log_file: TextIOWrapper):
     print('running sender')
     msgs = []
     i = 0
@@ -58,23 +60,21 @@ def sender():
                     else:
                         break
                 if id_ != s_id_:
-                    j = 0
-                    while msgs[j][0] < id_:
-                        j += 1
-                    dropped_repeated_or_out_of_order += j
-                    msgs = msgs[j:]
+                    while msgs[0][0] < id_:
+                        msgs.pop(0)
+                        dropped_repeated_or_out_of_order += 1
                     s_id_, snd_time = msgs[0]
-                else:
-                    msgs.pop(0)
+                msgs.pop(0)
                 latency = (rcv_time - snd_time) / 2
                 latencies.append(latency)
-                # print(f'lat: {latency}s\tdropped_ish: {dropped_repeated_or_out_of_order}')
-                print(f'{time.time()},{latency}', flush=True)
+                log=f'{time.time()},{latency},{dropped_repeated_or_out_of_order}'
+                print(log)
+                log_file.write(log+"\n")
             except queue.Empty:
                 break
         time.sleep(float(period_millis) / 1000)
         num = str(i)
-        num += " "
+        num += " " * (ID_SIZE - len(num))
         msg = num + (extra_payload_size * "A")
         now = time.time()
         sock.sendto(msg.encode(), (dest_ip, dest_port))
@@ -82,4 +82,6 @@ def sender():
         i += 1
 
 threading.Thread(target=receiver).start()
-sender()
+
+with open(log_path, 'w') as f:
+    sender(f)

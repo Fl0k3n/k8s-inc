@@ -26,6 +26,7 @@ type TelemetryServiceClient interface {
 	ConfigureTelemetry(ctx context.Context, in *ConfigureTelemetryRequest, opts ...grpc.CallOption) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(ctx context.Context, in *DisableTelemetryRequest, opts ...grpc.CallOption) (*DisableTelemetryResponse, error)
 	SubscribeSourceCapabilities(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (TelemetryService_SubscribeSourceCapabilitiesClient, error)
+	// for metric display purposes
 	GetCollectionId(ctx context.Context, in *GetCollectionIdRequest, opts ...grpc.CallOption) (*GetCollectionIdResponse, error)
 }
 
@@ -103,6 +104,7 @@ type TelemetryServiceServer interface {
 	ConfigureTelemetry(context.Context, *ConfigureTelemetryRequest) (*ConfigureTelemetryResponse, error)
 	DisableTelemetry(context.Context, *DisableTelemetryRequest) (*DisableTelemetryResponse, error)
 	SubscribeSourceCapabilities(*empty.Empty, TelemetryService_SubscribeSourceCapabilitiesServer) error
+	// for metric display purposes
 	GetCollectionId(context.Context, *GetCollectionIdRequest) (*GetCollectionIdResponse, error)
 	mustEmbedUnimplementedTelemetryServiceServer()
 }

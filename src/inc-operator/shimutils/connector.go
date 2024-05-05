@@ -17,6 +17,7 @@ type TelemetryPluginConnector struct {
 	k8sClient client.Client
 	sdnClient pbt.TelemetryServiceClient
 	sdnConn *grpc.ClientConn
+	shimNamespace string
 	
 	sdnClientInitLock sync.Mutex
 	shimAccessDeadline time.Duration
@@ -28,6 +29,7 @@ func NewTelemetryPluginConnector(client client.Client) *TelemetryPluginConnector
 		k8sClient: client,
 		sdnClient: nil,
 		sdnConn: nil,
+		shimNamespace: "",
 		sdnClientInitLock: sync.Mutex{},
 		shimAccessDeadline: time.Second * 2,
 		closed: false,
@@ -59,6 +61,10 @@ func (t *TelemetryPluginConnector) WithTelemetryClient(consumer func(client pbt.
 	return err
 }
 
+func (t *TelemetryPluginConnector) GetNamespace() string {
+	return t.shimNamespace
+}
+
 func (t *TelemetryPluginConnector) reset() {
 	t.sdnClientInitLock.Lock()
 	defer t.sdnClientInitLock.Unlock()
@@ -76,6 +82,7 @@ func (t *TelemetryPluginConnector) getConnection() (*grpc.ClientConn, error) {
 	if err != nil {
 		return nil, err
 	}
+	t.shimNamespace = shim.Namespace
 	addr := shim.Spec.SdnConfig.TelemetryServiceGrpcAddr
 	return grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 }
