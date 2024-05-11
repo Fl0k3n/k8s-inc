@@ -26,6 +26,7 @@ type SdnFrontendClient interface {
 	GetTopology(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (*TopologyResponse, error)
 	GetSwitchDetails(ctx context.Context, in *SwitchNames, opts ...grpc.CallOption) (*SwitchDetailsResponse, error)
 	GetProgramDetails(ctx context.Context, in *ProgramDetailsRequest, opts ...grpc.CallOption) (*ProgramDetailsResponse, error)
+	SubscribeNetworkChanges(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (SdnFrontend_SubscribeNetworkChangesClient, error)
 }
 
 type sdnFrontendClient struct {
@@ -63,6 +64,38 @@ func (c *sdnFrontendClient) GetProgramDetails(ctx context.Context, in *ProgramDe
 	return out, nil
 }
 
+func (c *sdnFrontendClient) SubscribeNetworkChanges(ctx context.Context, in *empty.Empty, opts ...grpc.CallOption) (SdnFrontend_SubscribeNetworkChangesClient, error) {
+	stream, err := c.cc.NewStream(ctx, &SdnFrontend_ServiceDesc.Streams[0], "/sdn.SdnFrontend/SubscribeNetworkChanges", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &sdnFrontendSubscribeNetworkChangesClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type SdnFrontend_SubscribeNetworkChangesClient interface {
+	Recv() (*NetworkChange, error)
+	grpc.ClientStream
+}
+
+type sdnFrontendSubscribeNetworkChangesClient struct {
+	grpc.ClientStream
+}
+
+func (x *sdnFrontendSubscribeNetworkChangesClient) Recv() (*NetworkChange, error) {
+	m := new(NetworkChange)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // SdnFrontendServer is the server API for SdnFrontend service.
 // All implementations must embed UnimplementedSdnFrontendServer
 // for forward compatibility
@@ -70,6 +103,7 @@ type SdnFrontendServer interface {
 	GetTopology(context.Context, *empty.Empty) (*TopologyResponse, error)
 	GetSwitchDetails(context.Context, *SwitchNames) (*SwitchDetailsResponse, error)
 	GetProgramDetails(context.Context, *ProgramDetailsRequest) (*ProgramDetailsResponse, error)
+	SubscribeNetworkChanges(*empty.Empty, SdnFrontend_SubscribeNetworkChangesServer) error
 	mustEmbedUnimplementedSdnFrontendServer()
 }
 
@@ -85,6 +119,9 @@ func (UnimplementedSdnFrontendServer) GetSwitchDetails(context.Context, *SwitchN
 }
 func (UnimplementedSdnFrontendServer) GetProgramDetails(context.Context, *ProgramDetailsRequest) (*ProgramDetailsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetProgramDetails not implemented")
+}
+func (UnimplementedSdnFrontendServer) SubscribeNetworkChanges(*empty.Empty, SdnFrontend_SubscribeNetworkChangesServer) error {
+	return status.Errorf(codes.Unimplemented, "method SubscribeNetworkChanges not implemented")
 }
 func (UnimplementedSdnFrontendServer) mustEmbedUnimplementedSdnFrontendServer() {}
 
@@ -153,6 +190,27 @@ func _SdnFrontend_GetProgramDetails_Handler(srv interface{}, ctx context.Context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _SdnFrontend_SubscribeNetworkChanges_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(empty.Empty)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(SdnFrontendServer).SubscribeNetworkChanges(m, &sdnFrontendSubscribeNetworkChangesServer{stream})
+}
+
+type SdnFrontend_SubscribeNetworkChangesServer interface {
+	Send(*NetworkChange) error
+	grpc.ServerStream
+}
+
+type sdnFrontendSubscribeNetworkChangesServer struct {
+	grpc.ServerStream
+}
+
+func (x *sdnFrontendSubscribeNetworkChangesServer) Send(m *NetworkChange) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // SdnFrontend_ServiceDesc is the grpc.ServiceDesc for SdnFrontend service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -173,6 +231,12 @@ var SdnFrontend_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _SdnFrontend_GetProgramDetails_Handler,
 		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "SubscribeNetworkChanges",
+			Handler:       _SdnFrontend_SubscribeNetworkChanges_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "sdn/sdn.proto",
 }

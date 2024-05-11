@@ -18,11 +18,15 @@ package controllers
 
 import (
 	"context"
-	"errors"
+	"fmt"
+	"time"
 
 	sets "github.com/hashicorp/go-set"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/keepalive"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -31,7 +35,10 @@ import (
 	"k8s.io/utils/strings/slices"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/log"
+	"sigs.k8s.io/controller-runtime/pkg/source"
 
 	incv1alpha1 "github.com/Fl0k3n/k8s-inc/sdn-shim/api/v1alpha1"
 
@@ -40,12 +47,20 @@ import (
 
 // SDNShimReconciler reconciles a SDNShim object
 
-const ManagedClusterTopologyName = "cluster-topo"
+var TOPOLOGY_KEY = types.NamespacedName{Name: "cluster-topo", Namespace: "default"}
+const SDN_CONN_RETRY_PERIOD = 1*time.Second
+var SDN_KEEP_ALIVE_PARAMS = keepalive.ClientParameters{
+	Time:                5 * time.Second,  // send pings every 5 seconds if there is no activity
+	Timeout:             time.Second,      // wait 1 second for ping ack before considering the connection dead
+	PermitWithoutStream: true,             // send pings even without active streams
+}
 
 type SDNShimReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+	ShimForClient *incv1alpha1.SDNShim
 	sdnClient pb.SdnFrontendClient
+	sdnConn *grpc.ClientConn
 }
 
 
@@ -63,13 +78,228 @@ type SDNShimReconciler struct {
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs/finalizers,verbs=update
 
 
-func (r *SDNShimReconciler) runSdnClient(grpcAddr string) error {
-	conn, err := grpc.Dial(grpcAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+func (r *SDNShimReconciler) runSdnClientForShim(shim *incv1alpha1.SDNShim) error {
+	conn, err := grpc.Dial(
+		shim.Spec.SdnConfig.SdnGrpcAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(SDN_KEEP_ALIVE_PARAMS),
+	)
 	if err != nil {
 		return err
 	}
+	r.ShimForClient = shim
+	r.sdnConn = conn
 	r.sdnClient = pb.NewSdnFrontendClient(conn)
 	return nil
+}
+
+func (r *SDNShimReconciler) closeSdnClient() {
+	r.sdnConn.Close()
+	r.ShimForClient = nil
+	r.sdnConn = nil
+	r.sdnClient = nil
+}
+
+func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+	log := log.FromContext(ctx)
+
+	shimConfig := &incv1alpha1.SDNShim{}
+	err := r.Get(ctx, req.NamespacedName, shimConfig)
+	if err != nil {
+		log.Info("SdnShim not found")
+		return ctrl.Result{}, nil
+	}
+
+	shouldRunClient := false
+	if r.sdnClient == nil {
+		shouldRunClient = true
+	} else {
+		if r.ShimForClient.Spec.SdnConfig.SdnGrpcAddr != shimConfig.Spec.SdnConfig.SdnGrpcAddr {
+			r.closeSdnClient()
+			shouldRunClient = true
+		}
+	}
+	if shouldRunClient {
+		if err := r.runSdnClientForShim(shimConfig); err != nil {
+			log.Error(err, "Failed to connect to SDN controller")
+			return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+		}
+	}
+
+	sdnTopo, err := r.sdnClient.GetTopology(ctx, &emptypb.Empty{})
+	if err != nil {
+		r.closeSdnClient()
+		log.Error(err, "Failed to connect to fetch topology from SDN")
+		return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+	}
+	topo := r.buildClusterTopoCR(sdnTopo)
+
+	storedTopo := &incv1alpha1.Topology{}
+	if err := r.Get(ctx, TOPOLOGY_KEY, storedTopo); err != nil {
+		if apierrors.IsNotFound(err) {
+			if err := r.Client.Create(ctx, topo); err != nil {
+				log.Error(err, "Failed to create topology CR")
+				return ctrl.Result{}, err
+			}
+			return ctrl.Result{Requeue: true}, nil
+		}
+		return ctrl.Result{}, err
+	} else if r.topologyChanged(storedTopo, topo) {
+		log.Info("Topology changed, updating")
+		if err := r.Client.Update(ctx, topo); err != nil {
+			return ctrl.Result{}, err
+		}
+	}
+
+	switchList := &incv1alpha1.IncSwitchList{}
+	if err := r.List(ctx, switchList); err != nil {
+		log.Error(err, "Failed to list incswitches")
+		return ctrl.Result{}, err
+	}
+	presentSwitchLut := map[string]*incv1alpha1.IncSwitch{}
+	presentSwitchNames := sets.New[string](0)
+	for i, item := range switchList.Items {
+		presentSwitchNames.Insert(item.Name)
+		presentSwitchLut[item.Name] = &switchList.Items[i]
+	}
+
+	desiredSwitchNames := sets.New[string](0)
+	for _, dev := range topo.Spec.Graph {
+		if dev.DeviceType == incv1alpha1.INC_SWITCH {
+			desiredSwitchNames.Insert(dev.Name)
+		}
+	}
+	switchesToAdd := desiredSwitchNames.Difference(presentSwitchNames)
+	switchesToCheck := desiredSwitchNames.Intersect(presentSwitchNames)
+	switchesToRemove := presentSwitchNames.Difference(desiredSwitchNames)
+	
+	for _, swName := range switchesToRemove.Slice() {
+		if err := r.Client.Delete(ctx, presentSwitchLut[swName]); err != nil {
+			log.Error(err, "failed to delete incSwitch")
+			return ctrl.Result{}, err
+		}
+	}
+	switchDetailsResp, err := r.sdnClient.GetSwitchDetails(ctx, &pb.SwitchNames{
+		Names: switchesToAdd.Union(switchesToCheck).Slice(),
+	})
+	if err != nil {
+		log.Error(err, "Failed to fetch switch details from SDN")
+		statusCode := status.Code(err)
+		if statusCode == codes.NotFound || statusCode == codes.InvalidArgument {
+			return ctrl.Result{Requeue: true}, nil
+		}
+		r.closeSdnClient()
+		return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+	}
+	desiredProgramNames := sets.New[string](0)
+	for _, swName := range switchesToCheck.Slice() {
+		if details, ok := switchDetailsResp.Details[swName]; ok {
+			desiredProgramNames.Insert(details.InstalledProgram)
+			storedDetails := presentSwitchLut[swName]
+			if details.Arch != storedDetails.Spec.Arch || details.InstalledProgram != storedDetails.Spec.ProgramName {
+				storedDetails.Spec.Arch = details.Arch
+				storedDetails.Spec.ProgramName = details.InstalledProgram
+				if err := r.Client.Update(ctx, storedDetails); err != nil {
+					log.Error(err, "Failed to update incswitch")
+					return ctrl.Result{}, err
+				}
+			}
+		} else {
+			log.Info(fmt.Sprintf("Unexpected SDN response, switch %s was queried but not returned", swName))
+		}
+	}
+	for _, swName := range switchesToAdd.Slice() {
+		if details, ok := switchDetailsResp.Details[swName]; ok {
+			desiredProgramNames.Insert(details.InstalledProgram)
+			if err := r.Client.Create(ctx, r.buildIncSwitchCR(details)); err != nil {
+				log.Error(err, "Failed to create INC switch CR")
+				return ctrl.Result{}, err
+			}
+		} else {
+			log.Info(fmt.Sprintf("Unexpected SDN response, switch %s was queried but not returned", swName))
+		}
+	}
+
+	programList := &incv1alpha1.P4ProgramList{}
+	if err := r.Client.List(ctx, programList); err != nil {
+		log.Error(err, "Failed to list p4 programs")
+		return ctrl.Result{}, err
+	}
+	storedProgramNames := sets.New[string](len(programList.Items))
+	programLut := map[string]*incv1alpha1.P4Program{}
+	for i, p := range programList.Items {
+		programLut[p.Name] = &programList.Items[i]
+		storedProgramNames.Insert(p.Name)
+	}
+	programsToAdd := desiredProgramNames.Difference(storedProgramNames)
+	programsToCheck := desiredProgramNames.Intersect(storedProgramNames)
+	programsToRemove := storedProgramNames.Difference(desiredProgramNames)
+	for _, programName := range programsToRemove.Slice() {
+		if err := r.Delete(ctx, programLut[programName]); err != nil {
+			log.Error(err, "failed to delete p4 program")
+			return ctrl.Result{}, err
+		}
+	}
+	desiredPrograms := map[string]*incv1alpha1.P4Program{}
+	for _, programName := range programsToAdd.Union(programsToCheck).Slice() { 
+		programDetailsResp, err := r.sdnClient.GetProgramDetails(ctx, &pb.ProgramDetailsRequest{
+			ProgramName: programName,
+		})
+		if err != nil {
+			log.Error(err, "Failed to fetch p4 program details from SDN")
+			statusCode := status.Code(err)
+			if statusCode == codes.NotFound {
+				return ctrl.Result{Requeue: true}, nil
+			}
+			r.closeSdnClient()
+			return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+		}
+		desiredPrograms[programName] = r.buildP4ProgramCR(programName, programDetailsResp)
+	}
+	for _, programName := range programsToAdd.Slice() {
+		if err := r.Create(ctx, desiredPrograms[programName]); err != nil {
+			log.Error(err, "Failed to create p4program")					
+			return ctrl.Result{}, err
+		}
+	}
+	for _, programName := range programsToCheck.Slice() {
+		current, desired := programLut[programName], desiredPrograms[programName]
+		if !slices.Equal(current.Spec.ImplementedInterfaces, desired.Spec.ImplementedInterfaces) {
+			if err := r.Update(ctx, desired); err != nil {
+				log.Error(err, "Failed to update p4program")
+				return ctrl.Result{}, err
+			}
+		}
+	}
+	log.Info("Reconciled SDNShim")
+	return ctrl.Result{}, nil
+}
+
+func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
+	initChan := make(chan event.GenericEvent)
+	log := mgr.GetLogger()
+	triggerRestoringInternalStateIfShimsExisted := func () {
+		for {
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			shims := &incv1alpha1.SDNShimList{}
+			if err := r.Client.List(ctx, shims); err != nil {
+				cancel()
+				log.Error(err, "failed to list existing shims during init")
+				time.Sleep(2*time.Second)
+				continue
+			}
+			cancel()
+			for i := range shims.Items {
+				initChan <- event.GenericEvent{Object: &shims.Items[i]}
+			}
+			return
+		}
+	}
+	go triggerRestoringInternalStateIfShimsExisted()
+	return ctrl.NewControllerManagedBy(mgr).
+		Watches(&source.Channel{Source: initChan}, &handler.EnqueueRequestForObject{}).
+		For(&incv1alpha1.SDNShim{}).
+		Complete(r)
 }
 
 func deviceTypeFromProto(dt pb.DeviceType) incv1alpha1.DeviceType {
@@ -83,7 +313,7 @@ func deviceTypeFromProto(dt pb.DeviceType) incv1alpha1.DeviceType {
 	}
 }
 
-func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ctrl.Request) *incv1alpha1.Topology {
+func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse) *incv1alpha1.Topology {
 	graph := make([]incv1alpha1.NetworkDevice, len(topo.Graph))
 	for i, dev := range topo.Graph {
 		links := make([]incv1alpha1.Link, len(dev.Links))
@@ -101,8 +331,8 @@ func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ct
 	
 	res := &incv1alpha1.Topology{
 		ObjectMeta: metav1.ObjectMeta{
-			Name: ManagedClusterTopologyName,
-			Namespace: req.Namespace,
+			Name: TOPOLOGY_KEY.Name,
+			Namespace: TOPOLOGY_KEY.Namespace,
 		},
 		Spec: incv1alpha1.TopologySpec{
 			Graph: graph,
@@ -114,11 +344,31 @@ func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse, req ct
 	return res
 }
 
-func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails, req ctrl.Request) *incv1alpha1.IncSwitch {
+func (r *SDNShimReconciler) topologyChanged(previous *incv1alpha1.Topology, current *incv1alpha1.Topology) bool {
+	if len(previous.Spec.Graph) != len(current.Spec.Graph) {
+		return true
+	}
+	// we assume that order shouldn't change
+	for i := range previous.Spec.Graph {
+		prev, cur := previous.Spec.Graph[i], current.Spec.Graph[i]
+		if prev.Name != cur.Name || prev.DeviceType != cur.DeviceType || len(prev.Links) != len(cur.Links) {
+			return true
+		}
+		for j := range prev.Links {
+			l1, l2 := prev.Links[j], cur.Links[j]
+			if l1.PeerName != l2.PeerName {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails) *incv1alpha1.IncSwitch {
 	res := &incv1alpha1.IncSwitch{
 		ObjectMeta: metav1.ObjectMeta{
 			Name: details.Name,
-			Namespace: req.Namespace,
+			Namespace: TOPOLOGY_KEY.Namespace,
 		},
 		Spec: incv1alpha1.IncSwitchSpec{
 			Arch: details.Arch,
@@ -131,189 +381,15 @@ func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails, req ctrl
 	return res
 }
 
-func (r *SDNShimReconciler) reconcileTopology(ctx context.Context, req ctrl.Request) (topo *incv1alpha1.Topology ,changed bool, err error) {
-	topos := &incv1alpha1.TopologyList{}
-	if err := r.List(ctx, topos); err != nil {
-		return nil, false, err
+func (r *SDNShimReconciler) buildP4ProgramCR(programName string, details *pb.ProgramDetailsResponse) *incv1alpha1.P4Program {
+	return &incv1alpha1.P4Program{
+		ObjectMeta: ctrl.ObjectMeta{
+			Name: programName,
+			Namespace: TOPOLOGY_KEY.Namespace,
+		},
+		Spec: incv1alpha1.P4ProgramSpec{
+			ImplementedInterfaces: details.ImplementedInterfaces,
+			Artifacts: []incv1alpha1.ProgramArtifacts{},
+		},
 	}
-	if topos.Items == nil || len(topos.Items) == 0 {
-		topo, err := r.sdnClient.GetTopology(ctx, &emptypb.Empty{})
-		if err != nil {
-			return nil, false, err
-		}
-		topoCr := r.buildClusterTopoCR(topo, req)
-		if err := r.Client.Create(ctx, topoCr); err != nil {
-			log.FromContext(ctx).Error(err, "Failed to create CR")
-			return nil, false, err
-		}
-		return topoCr, true, nil
-	} 
-	log.FromContext(ctx).Info("Topo exists, TODO reconcile it if it may change") // TODO
-	return &topos.Items[0], false, nil
-}
-
-func (r *SDNShimReconciler) reconcileP4Programs(ctx context.Context, req ctrl.Request, programNames *sets.Set[string]) error {
-	// TODO maybe move it to p4program controller and watch for incswitch changes there
-	log := log.FromContext(ctx)
-	for _, programName := range programNames.Slice() {
-		resourceKey := types.NamespacedName{Name: programName, Namespace: req.Namespace}
-		p4program := &incv1alpha1.P4Program{}
-		if err := r.Get(ctx, resourceKey, p4program); err != nil {
-			if apierrors.IsNotFound(err) {
-				programDetailsResp, err := r.sdnClient.GetProgramDetails(ctx, &pb.ProgramDetailsRequest{
-					ProgramName: programName,
-				})
-				if err != nil {
-					return err
-				}
-				p4program = &incv1alpha1.P4Program{
-					ObjectMeta: ctrl.ObjectMeta{
-						Name: programName,
-						Namespace: req.Namespace,
-					},
-					Spec: incv1alpha1.P4ProgramSpec{
-						ImplementedInterfaces: programDetailsResp.ImplementedInterfaces,
-						Artifacts: []incv1alpha1.ProgramArtifacts{},
-					},
-				}
-				if err := r.Create(ctx, p4program); err != nil {
-					log.Error(err, "Failed to create p4program")					
-					return err
-				}
-			} else {
-				log.Error(err, "Failed to get p4program")
-				return err
-			}
-		} else {
-			// TODO check if program state matches
-			_ = p4program
-		}
-	}
-	return nil
-}
-
-func (r *SDNShimReconciler) reconcileIncSwitches(ctx context.Context, req ctrl.Request, topo *incv1alpha1.Topology) error {
-	log := log.FromContext(ctx)
-	switchList := &incv1alpha1.IncSwitchList{}
-	if err := r.List(ctx, switchList); err != nil {
-		return err
-	}
-	desiredSwitchNames := make([]string, 0)
-	for _, dev := range topo.Spec.Graph {
-		if dev.DeviceType == incv1alpha1.INC_SWITCH {
-			desiredSwitchNames = append(desiredSwitchNames, dev.Name)
-		}
-	}
-	switchesToRemove := make([]string, 0)
-	switchesToAdd := make([]string, 0)
-	switchesToCheckState := make([]string, 0)
-
-	if switchList.Items == nil || len(switchList.Items) == 0 {
-		if len(desiredSwitchNames) == 0 {
-			return nil
-		}
-		switchesToAdd = desiredSwitchNames
-	} else {
-		// TODO cache in a faster struture if there can be many
-		for _, presentItem := range switchList.Items {
-			if slices.Contains(desiredSwitchNames, presentItem.Name) {
-				switchesToCheckState = append(switchesToCheckState, presentItem.Name)
-			} else {
-				switchesToRemove = append(switchesToRemove, presentItem.Name)
-			}
-		}
-		for _, desiredItem := range desiredSwitchNames {
-			found := false
-			for _, presentItem := range switchList.Items {
-				if presentItem.Name == desiredItem {
-					found = true
-					break
-				}
-			}
-			if !found {
-				switchesToAdd = append(switchesToAdd, desiredItem)
-			}
-		}
-	}
-
-	if len(switchesToRemove) > 0 {
-		// TODO
-		log.Info("Should delete some switches")
-	}
-	if len(switchesToCheckState) > 0 {
-		log.Info("Should check some switches")
-	}
-	if len(switchesToAdd) > 0 {
-		if details, err := r.sdnClient.GetSwitchDetails(ctx, &pb.SwitchNames{
-			Names: switchesToAdd,
-		}); err != nil {
-			log.Error(err, "Failed to fetch switch details")
-			return err
-		} else {
-			programNames := sets.New[string](0)
-			for _, switchDetails := range details.Details {
-				if err := r.Client.Create(ctx, r.buildIncSwitchCR(switchDetails, req)); err != nil {
-					log.Error(err, "Failed to add switch details")
-					return err
-				}
-				programNames.Insert(switchDetails.InstalledProgram)
-			}
-			if err := r.reconcileP4Programs(ctx, req, programNames); err != nil {
-				log.Error(err, "Failed to reconcile p4 programs")
-				return err
-			}
-		}
-	}
-	return nil
-}
-
-// Reconcile is part of the main kubernetes reconciliation loop which aims to
-// move the current state of the cluster closer to the desired state.
-// TODO(user): Modify the Reconcile function to compare the state specified by
-// the SDNShim object against the actual cluster state, and then
-// perform operations to make the cluster state reflect the state specified by
-// the user.
-//
-// For more details, check Reconcile and its Result here:
-// - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.14.1/pkg/reconcile
-func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	log := log.FromContext(ctx)
-	
-	shimConfig := &incv1alpha1.SDNShim{}
-	err := r.Get(ctx, req.NamespacedName, shimConfig)
-	if err != nil {
-		log.Info("SdnShim not found")
-		return ctrl.Result{}, nil
-	}
-
-	if shimConfig.Spec.SdnConfig.SdnType == incv1alpha1.KindaSDN {
-		if r.sdnClient == nil {
-			if err := r.runSdnClient(shimConfig.Spec.SdnConfig.SdnGrpcAddr); err != nil {
-				log.Error(err, "Failed to connect to SDN controller")
-				return ctrl.Result{}, err
-			}
-		}
-		topo, changed, err := r.reconcileTopology(ctx, req)
-		if err != nil {
-			return ctrl.Result{}, err
-		}
-		if changed {
-			log.Info("Updated topology")
-		}
-		if err := r.reconcileIncSwitches(ctx, req, topo); err != nil {
-			return ctrl.Result{}, err
-		}
-	} else {
-		return ctrl.Result{}, errors.New("unsupported SDN type")
-	}
-	
-	log.Info("Reconciled SDNShim")
-	return ctrl.Result{}, nil
-}
-
-// SetupWithManager sets up the controller with the Manager.
-func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	return ctrl.NewControllerManagedBy(mgr).
-		For(&incv1alpha1.SDNShim{}).
-		Complete(r)
 }

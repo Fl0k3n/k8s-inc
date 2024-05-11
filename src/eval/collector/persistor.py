@@ -42,7 +42,6 @@ class CsvLogPersistor(LogPersistor):
         common += f',{report.seq_num},{report.switch_id},{report.hop_count}'
 
         for hop in report.hop_metadata:
-            hop: HopMetadata
             metrics  = f',{hop.egress_port_tx_util},{hop.egress_timestamp},{hop.hop_latency},{hop.ingress_timestamp}'
             metrics += f',{hop.l1_egress_port_id},{hop.l1_ingress_port_id},{hop.l2_egress_port_id},{hop.l2_ingress_port_id}'
             metrics += f',{hop.queue_occupancy},{hop.queue_occupancy_id},{hop.switch_id}'

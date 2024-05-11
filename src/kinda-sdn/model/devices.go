@@ -30,6 +30,7 @@ type Link struct {
 type Device interface {
 	GetName() DeviceName
 	GetLinks() []*Link
+	AddLink(*Link)
 	GetType() DeviceType
 	GetPortNumberTo(DeviceName) (p int, ok bool)
 	MustGetPortNumberTo(DeviceName) int
@@ -57,6 +58,10 @@ func (b *BaseDevice) GetName() DeviceName {
 
 func (b *BaseDevice) GetLinks() []*Link {
 	return b.Links
+}
+
+func (b *BaseDevice) AddLink(link *Link) {
+	b.Links = append(b.Links, link)
 }
 
 // 0 based, increment if used in bmv2

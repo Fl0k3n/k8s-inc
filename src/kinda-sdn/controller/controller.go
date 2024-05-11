@@ -3,6 +3,8 @@ package controller
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
+	"time"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/device"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/model"
@@ -21,6 +23,11 @@ type KindaSdn struct {
 	initialP4Config map[model.DeviceName][]connector.RawTableEntry
 	telemetryService *telemetry.TelemetryService
 	bmv2Managers map[model.DeviceName]*device.Bmv2Manager
+
+	// TODO this is just for evaluation purposes, a lot of work is required here to 
+	// deal with concurrency properly
+	networkUpdatesChan chan *pb.NetworkChange
+	numUpdateListeners *atomic.Int32
 }
 
 func NewKindaSdn(
@@ -29,12 +36,17 @@ func NewKindaSdn(
 	initialP4Config map[model.DeviceName][]connector.RawTableEntry,
 	telemetryService *telemetry.TelemetryService,
 ) *KindaSdn {
+	numUpdateListeners := &atomic.Int32{}
+	numUpdateListeners.Store(0)
+
 	return &KindaSdn{
 		topo: topo,
 		programRegistry: programRegistry,
 		initialP4Config: initialP4Config,
 		telemetryService: telemetryService,
 		bmv2Managers: make(map[string]*device.Bmv2Manager),
+		networkUpdatesChan: make(chan *pb.NetworkChange),
+		numUpdateListeners: numUpdateListeners,
 	}
 }
 
@@ -81,6 +93,64 @@ func (k *KindaSdn) writeInitialEntriesToBmv2Switches(entries map[model.DeviceNam
 	return nil
 }
 
+func (k *KindaSdn) notifyNetworkChanged (change *pb.NetworkChange) {
+	go func ()  {
+		for {
+			select {
+			case k.networkUpdatesChan <- change:
+				return
+			default:
+				if k.numUpdateListeners.Load() == 0 {
+					// ignore this update, queue is full
+					return
+				} else {
+					// TODO use condVar 
+					time.Sleep(100*time.Millisecond)
+				}
+			}
+		}
+	}()
+}
+
+func (k *KindaSdn) AddDevices(devices []model.Device) error {
+	k.topo.Devices = append(k.topo.Devices, devices...)
+	G := model.TopologyToGraph(k.topo)
+	for _, dev := range devices {
+		for _, link := range dev.GetLinks() {
+			neigh, ok := G[link.To]
+			if !ok {
+				return fmt.Errorf("device %s links to device %s which doesn't exist", dev.GetName(), link.To)
+			}
+			neigh.AddLink(model.NewLink(dev.GetName(), "00:00:00:00:00:00", "00.00.00.00", 0))
+		}
+	}
+	k.notifyNetworkChanged(&pb.NetworkChange{
+		Change: &pb.NetworkChange_TopologyChange{},
+	})
+	return nil
+}
+
+func (k *KindaSdn) RemoveDevices(deviceNames []model.DeviceName) {
+	// TODO
+}
+
+func (k *KindaSdn) ChangeProgram(deviceName model.DeviceName, programName string) error {
+	for _, dev := range k.topo.Devices {
+		if dev.GetName() == deviceName {
+			sw, ok := dev.(*model.IncSwitch)
+			if !ok {
+				return fmt.Errorf("device %s is not an inc switch, can't update program", deviceName)
+			}
+			sw.InstalledProgram = programName
+			k.notifyNetworkChanged(&pb.NetworkChange{
+				Change: &pb.NetworkChange_ProgramChange{},
+			})
+			return nil
+		}
+	}
+	return fmt.Errorf("device %s doesn't exist", deviceName)
+}
+
 func (k *KindaSdn) InitTopology(setupL3Forwarding bool) error {
 	entries := k.initialP4Config
 	for _, dev := range k.topo.Devices {
@@ -114,3 +184,4 @@ func (k *KindaSdn) InitTopology(setupL3Forwarding bool) error {
 	}
 	return nil
 }
+

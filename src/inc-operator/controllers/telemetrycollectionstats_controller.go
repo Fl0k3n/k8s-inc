@@ -173,7 +173,6 @@ func (r *TelemetryCollectionStatsReconciler) findStatsThatUseCollector(collector
 	return res
 }
 
-// SetupWithManager sets up the controller with the Manager.
 func (r *TelemetryCollectionStatsReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	r.collectorHandlers = make(map[types.NamespacedName]*CollectorStatHandlers)
 	initChan := make(chan event.GenericEvent)

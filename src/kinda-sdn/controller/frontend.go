@@ -53,6 +53,19 @@ func (m *KindaSdn) GetSwitchDetails(ctx context.Context, names *pb.SwitchNames) 
 	}, nil
 }
 
+func (k *KindaSdn) SubscribeNetworkChanges(req *empty.Empty, respStream pb.SdnFrontend_SubscribeNetworkChangesServer) error {
+	fmt.Printf("Handling SubscribeNetworkChanges\n")
+	k.numUpdateListeners.Add(1)
+	defer k.numUpdateListeners.Add(-1)
+	for msg := range k.networkUpdatesChan {
+		if err := respStream.Send(msg); err != nil {
+			fmt.Printf("Failed to network state update %e\n", err)
+			return nil
+		}
+	}
+	return nil
+}
+
 func (m *KindaSdn) ConfigureTelemetry(ctx context.Context, req *pbt.ConfigureTelemetryRequest) (*pbt.ConfigureTelemetryResponse, error) {
 	fmt.Printf("Handling ConfigureTelemetry for intent %s\n", req.IntentId)
 	return m.telemetryService.ConfigureTelemetry(req, m.topo, func(dn model.DeviceName) device.IncSwitch {

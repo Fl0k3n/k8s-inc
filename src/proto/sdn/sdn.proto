@@ -10,10 +10,7 @@ service SdnFrontend {
     rpc GetTopology(google.protobuf.Empty) returns (TopologyResponse) {}
     rpc GetSwitchDetails(SwitchNames) returns (SwitchDetailsResponse) {}
     rpc GetProgramDetails(ProgramDetailsRequest) returns (ProgramDetailsResponse) {}
-
-    // k8s should be able to setup hooks for various changes and update etcd if needed
-    // this is more of a mock, we won't need anything like this in this local env
-    // rpc SubscribeTopologyChanges(google.protobuf.Empty) returns (stream TopologyUpdate) {} 
+    rpc SubscribeNetworkChanges(google.protobuf.Empty) returns (stream NetworkChange) {} 
 }
 
 message Link {
@@ -57,4 +54,33 @@ message ProgramDetailsRequest {
 
 message ProgramDetailsResponse {
     repeated string implementedInterfaces = 2; 
+}
+
+// message UpdatedDevice {
+//     Device previousState = 1;
+//     Device updatedState = 2;
+// }
+
+message TopologyChange {
+    // repeated Device addedDevices = 1;
+    // repeated Device removedDevices = 2;
+    // repeated UpdatedDevice updatedDevices = 3;
+}
+
+message ProgramChange {
+    // string programName = 1;
+    // repeated string implementedInterfaces = 2;
+}
+
+message DeviceStateChange {
+    // SwitchDetails oldDetails = 1;
+    // SwitchDetails newDetails = 2;
+}
+
+message NetworkChange {
+    oneof change {
+        TopologyChange topologyChange = 1;
+        ProgramChange programChange = 2;
+        DeviceStateChange deviceStateChange = 3;
+    }
 }
