@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	sets "github.com/hashicorp/go-set"
@@ -29,6 +30,7 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
@@ -45,24 +47,25 @@ import (
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
 )
 
-// SDNShimReconciler reconciles a SDNShim object
-
 var TOPOLOGY_KEY = types.NamespacedName{Name: "cluster-topo", Namespace: "default"}
 const SDN_CONN_RETRY_PERIOD = 1*time.Second
 var SDN_KEEP_ALIVE_PARAMS = keepalive.ClientParameters{
-	Time:                5 * time.Second,  // send pings every 5 seconds if there is no activity
-	Timeout:             time.Second,      // wait 1 second for ping ack before considering the connection dead
-	PermitWithoutStream: true,             // send pings even without active streams
+	Time:                15 * time.Second,
+	Timeout:             5 * time.Second,
+	PermitWithoutStream: false,
 }
 
 type SDNShimReconciler struct {
 	client.Client
 	Scheme *runtime.Scheme
+
+	sdnConnectorLock sync.Mutex
 	ShimForClient *incv1alpha1.SDNShim
 	sdnClient pb.SdnFrontendClient
 	sdnConn *grpc.ClientConn
+	networkUpdatesChan chan event.GenericEvent
+	watcherStopChan chan struct{}
 }
-
 
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=sdnshims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=sdnshims/status,verbs=get;update;patch
@@ -77,29 +80,6 @@ type SDNShimReconciler struct {
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs/status,verbs=get;update;patch
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=p4programs/finalizers,verbs=update
 
-
-func (r *SDNShimReconciler) runSdnClientForShim(shim *incv1alpha1.SDNShim) error {
-	conn, err := grpc.Dial(
-		shim.Spec.SdnConfig.SdnGrpcAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-		grpc.WithKeepaliveParams(SDN_KEEP_ALIVE_PARAMS),
-	)
-	if err != nil {
-		return err
-	}
-	r.ShimForClient = shim
-	r.sdnConn = conn
-	r.sdnClient = pb.NewSdnFrontendClient(conn)
-	return nil
-}
-
-func (r *SDNShimReconciler) closeSdnClient() {
-	r.sdnConn.Close()
-	r.ShimForClient = nil
-	r.sdnConn = nil
-	r.sdnClient = nil
-}
-
 func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
@@ -108,6 +88,26 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		log.Info("SdnShim not found")
 		return ctrl.Result{}, nil
+	}
+
+	if shimConfig.Status.Conditions == nil || len(shimConfig.Status.Conditions) == 0 {
+		meta.SetStatusCondition(&shimConfig.Status.Conditions, metav1.Condition{
+			Type: incv1alpha1.ConditionTypeSdnConnected,
+			Status: metav1.ConditionFalse,
+			Reason: "Reconciling",
+			Message: "Starting reconciliation",
+		})
+		meta.SetStatusCondition(&shimConfig.Status.Conditions, metav1.Condition{
+			Type: incv1alpha1.ConditionTypeNetworkReconciled,
+			Status: metav1.ConditionFalse,
+			Reason: "Reconciling",
+			Message: "Starting reconciliation",
+		})
+		if err := r.Status().Update(ctx, shimConfig); err != nil {
+			log.Error(err, "Failed to update shim status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	shouldRunClient := false
@@ -120,17 +120,37 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		}
 	}
 	if shouldRunClient {
-		if err := r.runSdnClientForShim(shimConfig); err != nil {
+		if err := r.runSdnClientForShim(ctx, shimConfig); err != nil {
 			log.Error(err, "Failed to connect to SDN controller")
+			meta.SetStatusCondition(&shimConfig.Status.Conditions, metav1.Condition{
+				Type: incv1alpha1.ConditionTypeSdnConnected,
+				Status: metav1.ConditionFalse,
+				Reason: "Reconciling",
+				Message: "Failed to establish connection",
+			})
+			if err := r.Status().Update(ctx, shimConfig); err != nil {
+				log.Error(err, "Failed to update shim status")
+			}
 			return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
 		}
+		meta.SetStatusCondition(&shimConfig.Status.Conditions, metav1.Condition{
+			Type: incv1alpha1.ConditionTypeSdnConnected,
+			Status: metav1.ConditionTrue,
+			Reason: "Reconciling",
+			Message: "SDN connected",
+		})
+		if err := r.Status().Update(ctx, shimConfig); err != nil {
+			log.Error(err, "Failed to update shim status")
+			return ctrl.Result{}, err
+		}
+		return ctrl.Result{Requeue: true}, nil
 	}
 
 	sdnTopo, err := r.sdnClient.GetTopology(ctx, &emptypb.Empty{})
 	if err != nil {
 		r.closeSdnClient()
 		log.Error(err, "Failed to connect to fetch topology from SDN")
-		return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+		return ctrl.Result{Requeue: true}, nil
 	}
 	topo := r.buildClusterTopoCR(sdnTopo)
 
@@ -146,7 +166,8 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{}, err
 	} else if r.topologyChanged(storedTopo, topo) {
 		log.Info("Topology changed, updating")
-		if err := r.Client.Update(ctx, topo); err != nil {
+		storedTopo.Spec.Graph = topo.Spec.Graph
+		if err := r.Client.Update(ctx, storedTopo); err != nil {
 			return ctrl.Result{}, err
 		}
 	}
@@ -164,7 +185,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	desiredSwitchNames := sets.New[string](0)
-	for _, dev := range topo.Spec.Graph {
+	for _, dev := range storedTopo.Spec.Graph {
 		if dev.DeviceType == incv1alpha1.INC_SWITCH {
 			desiredSwitchNames.Insert(dev.Name)
 		}
@@ -189,7 +210,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{Requeue: true}, nil
 		}
 		r.closeSdnClient()
-		return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+		return ctrl.Result{Requeue: true}, nil
 	}
 	desiredProgramNames := sets.New[string](0)
 	for _, swName := range switchesToCheck.Slice() {
@@ -252,7 +273,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 				return ctrl.Result{Requeue: true}, nil
 			}
 			r.closeSdnClient()
-			return ctrl.Result{RequeueAfter: SDN_CONN_RETRY_PERIOD}, nil
+			return ctrl.Result{Requeue: true}, nil
 		}
 		desiredPrograms[programName] = r.buildP4ProgramCR(programName, programDetailsResp)
 	}
@@ -271,12 +292,23 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			}
 		}
 	}
+	meta.SetStatusCondition(&shimConfig.Status.Conditions, metav1.Condition{
+		Type: incv1alpha1.ConditionTypeNetworkReconciled,
+		Status: metav1.ConditionTrue,
+		Reason: "Reconciling",
+		Message: "Network state reconciled",
+	})
+	if err := r.Status().Update(ctx, shimConfig); err != nil {
+		log.Error(err, "Failed to update shim status")
+		return ctrl.Result{}, err
+	}
 	log.Info("Reconciled SDNShim")
 	return ctrl.Result{}, nil
 }
 
 func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	initChan := make(chan event.GenericEvent)
+	r.sdnConnectorLock = sync.Mutex{}
+	r.networkUpdatesChan = make(chan event.GenericEvent)
 	log := mgr.GetLogger()
 	triggerRestoringInternalStateIfShimsExisted := func () {
 		for {
@@ -290,14 +322,14 @@ func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 			}
 			cancel()
 			for i := range shims.Items {
-				initChan <- event.GenericEvent{Object: &shims.Items[i]}
+				r.networkUpdatesChan <- event.GenericEvent{Object: &shims.Items[i]}
 			}
 			return
 		}
 	}
 	go triggerRestoringInternalStateIfShimsExisted()
 	return ctrl.NewControllerManagedBy(mgr).
-		Watches(&source.Channel{Source: initChan}, &handler.EnqueueRequestForObject{}).
+		Watches(&source.Channel{Source: r.networkUpdatesChan}, &handler.EnqueueRequestForObject{}).
 		For(&incv1alpha1.SDNShim{}).
 		Complete(r)
 }
@@ -337,9 +369,6 @@ func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse) *incv1
 		Spec: incv1alpha1.TopologySpec{
 			Graph: graph,
 		},
-		Status: incv1alpha1.TopologyStatus{
-			CustomStatus: "Creating",
-		},
 	}
 	return res
 }
@@ -374,9 +403,6 @@ func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails) *incv1al
 			Arch: details.Arch,
 			ProgramName: details.InstalledProgram,
 		},
-		Status: incv1alpha1.IncSwitchStatus{
-			InstalledProgram: details.InstalledProgram,
-		},
 	}
 	return res
 }
@@ -391,5 +417,76 @@ func (r *SDNShimReconciler) buildP4ProgramCR(programName string, details *pb.Pro
 			ImplementedInterfaces: details.ImplementedInterfaces,
 			Artifacts: []incv1alpha1.ProgramArtifacts{},
 		},
+	}
+}
+
+
+func (r *SDNShimReconciler) runSdnClientForShim(ctx context.Context, shim *incv1alpha1.SDNShim) error {
+	r.sdnConnectorLock.Lock()
+	defer r.sdnConnectorLock.Unlock()
+	conn, err := grpc.Dial(
+		shim.Spec.SdnConfig.SdnGrpcAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithKeepaliveParams(SDN_KEEP_ALIVE_PARAMS),
+	)
+	if err != nil {
+		return err
+	}
+	client := pb.NewSdnFrontendClient(conn)
+	changesStream, err := client.SubscribeNetworkChanges(ctx, &emptypb.Empty{})
+	if err != nil {
+		conn.Close()
+		return err
+	}
+	r.ShimForClient = shim
+	r.sdnConn = conn
+	r.sdnClient = client
+	r.watcherStopChan = make(chan struct{})
+	go r.watchSdnNetworkUpdates(shim, changesStream, r.watcherStopChan)
+	return nil
+}
+
+func (r *SDNShimReconciler) closeSdnClient() {
+	r.sdnConnectorLock.Lock()
+	defer r.sdnConnectorLock.Unlock()
+	close(r.watcherStopChan)
+	r.sdnConn.Close()
+	r.ShimForClient = nil
+	r.sdnConn = nil
+	r.sdnClient = nil
+}
+
+func (r *SDNShimReconciler) watchSdnNetworkUpdates(
+	shim *incv1alpha1.SDNShim,
+	changesStream pb.SdnFrontend_SubscribeNetworkChangesClient,
+	stopChan chan struct{},
+) {
+	for {
+		_, err := changesStream.Recv()
+		select {
+		case _, open := <- stopChan:
+			if !open {
+				return
+			}
+		default:
+			// continue
+		}
+		if err != nil {
+			r.sdnConnectorLock.Lock()
+			// if these conditions do not hold then reconciliation loop already
+			// called close on behalf of this goroutine and we shouldn't do it again
+			// if they do hold, this goroutine is the first entity that encountered some
+			// connection related error (e.g. ping timeout) and we should notify reconciliation
+			// loop to deal with this issue somehow (e.g. by reconnecting, changing status, etc...)
+			if r.ShimForClient != nil &&
+					client.ObjectKeyFromObject(shim) == client.ObjectKeyFromObject(r.ShimForClient) &&
+					shim.ResourceVersion == r.ShimForClient.ResourceVersion {
+				r.sdnConn.Close()
+				r.networkUpdatesChan <- event.GenericEvent{Object: shim}
+			}
+			r.sdnConnectorLock.Unlock()
+			return
+		}
+		r.networkUpdatesChan <- event.GenericEvent{Object: shim}
 	}
 }

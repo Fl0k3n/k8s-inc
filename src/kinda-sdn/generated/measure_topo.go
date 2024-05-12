@@ -9,7 +9,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r1", 
         []*model.Link{
             model.NewLink("r7", "00:00:0a:00:00:00", "10.0.13.1", 24),
-            model.NewLink("tree-worker2", "00:00:0a:00:00:01", "10.0.0.1", 24),
+            model.NewLink("tree-worker5", "00:00:0a:00:00:01", "10.0.0.1", 24),
         },
         "127.0.0.1:9560",
         "telemetry",
@@ -26,7 +26,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     )
     dev2 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker2",
+            Name: "tree-worker5",
             Links: []*model.Link{
                 model.NewLink("r1", "00:00:0a:00:00:05", "10.0.0.2", 24),
             },
@@ -101,8 +101,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r5", 
         []*model.Link{
             model.NewLink("r9", "00:00:0a:00:00:16", "10.0.17.1", 24),
-            model.NewLink("tree-worker5", "00:00:0a:00:00:17", "10.0.9.1", 24),
-            model.NewLink("tree-worker", "00:00:0a:00:00:18", "10.0.10.1", 24),
+            model.NewLink("tree-worker", "00:00:0a:00:00:17", "10.0.9.1", 24),
+            model.NewLink("tree-worker2", "00:00:0a:00:00:18", "10.0.10.1", 24),
         },
         "127.0.0.1:9564",
         "telemetry",
@@ -133,7 +133,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev14 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker5",
+            Name: "tree-worker",
             Links: []*model.Link{
                 model.NewLink("r5", "00:00:0a:00:00:1c", "10.0.9.2", 24),
             },
@@ -141,7 +141,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev15 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker",
+            Name: "tree-worker2",
             Links: []*model.Link{
                 model.NewLink("r5", "00:00:0a:00:00:1d", "10.0.10.2", 24),
             },

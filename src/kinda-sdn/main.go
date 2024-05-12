@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"time"
 
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/controller"
 	"github.com/Fl0k3n/k8s-inc/kinda-sdn/generated"
@@ -13,6 +14,7 @@ import (
 	pb "github.com/Fl0k3n/k8s-inc/proto/sdn"
 	pbt "github.com/Fl0k3n/k8s-inc/proto/sdn/telemetry"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 )
 
 func runGrpcServer(frontend *controller.KindaSdn, grpcAddr string) error {
@@ -20,7 +22,15 @@ func runGrpcServer(frontend *controller.KindaSdn, grpcAddr string) error {
 	if err != nil {
 		return err
 	}
-	server := grpc.NewServer()
+	kaep := keepalive.EnforcementPolicy{
+		MinTime:             5*time.Second,
+		PermitWithoutStream: true,
+	}
+	kasp := keepalive.ServerParameters{
+		Time:                  15 * time.Second, // Ping the client if it is idle for 5 seconds to ensure the connection is still active
+		Timeout:               5 * time.Second,  // Wait 1 second for the ping ack before assuming the connection is dead
+	}
+	server := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
 	pb.RegisterSdnFrontendServer(server, frontend)
 	pbt.RegisterTelemetryServiceServer(server, frontend)
 	return server.Serve(lis)
