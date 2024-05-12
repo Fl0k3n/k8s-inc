@@ -1,0 +1,88 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: InternalInNetworkTelemetryDeployment
+metadata:
+  name: intdepl-http
+spec:
+  collectorRef:
+    name: collector
+  collectionId: main-collection
+  deployments:
+    - name: receiver
+      template:
+        replicas: 2
+        selector:
+          matchLabels:
+            app: receiver-http
+        template:
+          metadata:
+            labels:
+              app: receiver-http
+          spec:
+            terminationGracePeriodSeconds: 0
+            containers:
+              - name: receiver-http
+                image: flok3n/latency_receiver_http:1.0.0
+                command:
+                  [
+                    "python3",
+                    "/receiver_http.py",
+                    "--http_port",
+                    "8000",
+                    "--mean_latency",
+                    "10",
+                    "--std_latency",
+                    "1",
+                  ]
+                ports:
+                  - containerPort: 8000
+                    protocol: TCP
+    - name: sender
+      template:
+        replicas: 1
+        selector:
+          matchLabels:
+            app: sender-http
+        template:
+          metadata:
+            labels:
+              app: sender-http
+          spec:
+            terminationGracePeriodSeconds: 1
+            containers:
+              - name: sender-http
+                image: flok3n/latency_sender_http:1.0.0
+                imagePullPolicy: Always
+                command:
+                  [
+                    "python3",
+                    "/sender_http.py",
+                    "--server_url",
+                    "http://latency-receiver-http.default.svc.cluster.local:13001/",
+                    "--timeout_millis",
+                    "1000",
+                    "--request_period_millis",
+                    "50",
+                    "--response_size",
+                    "800",
+                    "--log_path",
+                    "/logs/latency_http.csv",
+                  ]
+                volumeMounts:
+                  - name: logs-dir
+                    mountPath: /logs
+            volumes:
+              - name: logs-dir
+                hostPath:
+                  path: /logs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: latency-receiver-http
+spec:
+  selector:
+    app: receiver-http
+  ports:
+    - protocol: TCP
+      port: 13001
+      targetPort: 8000

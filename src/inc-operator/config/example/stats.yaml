@@ -6,4 +6,4 @@ spec:
   collectorRef:
     name: collector
   collectionId: main-collection
-  refreshPeriodMillis: 2000
+  refreshPeriodMillis: 100

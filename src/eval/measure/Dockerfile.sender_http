@@ -1,0 +1,7 @@
+FROM python:3.10.13-alpine3.18
+
+RUN pip install requests
+
+COPY ./sender_http.py .
+
+ENTRYPOINT ["python3", "/sender_http.py"]

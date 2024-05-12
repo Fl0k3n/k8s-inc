@@ -53,11 +53,11 @@ func main() {
 	}
 	kindaSdn := controller.NewKindaSdn(topo, programRegistry, map[string][]connector.RawTableEntry{}, telemetryService)
 	fmt.Println("Initializing topology")
-	// if err := kindaSdn.InitTopology(true); err != nil {
-	// 	fmt.Println("Failed to init topology")
-	// 	fmt.Println(err)
-	// 	return
-	// }
+	if err := kindaSdn.InitTopology(true); err != nil {
+		fmt.Println("Failed to init topology")
+		fmt.Println(err)
+		return
+	}
 	go runHttpNetworkChangeServer(kindaSdn, "127.0.0.1:9002")
 	fmt.Println("Running gRpc server")
 	err := runGrpcServer(kindaSdn, "127.0.0.1:9001")

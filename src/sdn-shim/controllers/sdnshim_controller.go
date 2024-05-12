@@ -110,8 +110,12 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 
+	r.sdnConnectorLock.Lock()
+	sdnClient := r.sdnClient
+	r.sdnConnectorLock.Unlock()
+
 	shouldRunClient := false
-	if r.sdnClient == nil {
+	if sdnClient == nil {
 		shouldRunClient = true
 	} else {
 		if r.ShimForClient.Spec.SdnConfig.SdnGrpcAddr != shimConfig.Spec.SdnConfig.SdnGrpcAddr {
@@ -146,7 +150,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		return ctrl.Result{Requeue: true}, nil
 	}
 
-	sdnTopo, err := r.sdnClient.GetTopology(ctx, &emptypb.Empty{})
+	sdnTopo, err := sdnClient.GetTopology(ctx, &emptypb.Empty{})
 	if err != nil {
 		r.closeSdnClient()
 		log.Error(err, "Failed to connect to fetch topology from SDN")
@@ -200,7 +204,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, err
 		}
 	}
-	switchDetailsResp, err := r.sdnClient.GetSwitchDetails(ctx, &pb.SwitchNames{
+	switchDetailsResp, err := sdnClient.GetSwitchDetails(ctx, &pb.SwitchNames{
 		Names: switchesToAdd.Union(switchesToCheck).Slice(),
 	})
 	if err != nil {
@@ -263,7 +267,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	desiredPrograms := map[string]*incv1alpha1.P4Program{}
 	for _, programName := range programsToAdd.Union(programsToCheck).Slice() { 
-		programDetailsResp, err := r.sdnClient.GetProgramDetails(ctx, &pb.ProgramDetailsRequest{
+		programDetailsResp, err := sdnClient.GetProgramDetails(ctx, &pb.ProgramDetailsRequest{
 			ProgramName: programName,
 		})
 		if err != nil {
@@ -329,7 +333,8 @@ func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	}
 	go triggerRestoringInternalStateIfShimsExisted()
 	return ctrl.NewControllerManagedBy(mgr).
-		Watches(&source.Channel{Source: r.networkUpdatesChan}, &handler.EnqueueRequestForObject{}).
+		Watches(&source.Channel{Source: r.networkUpdatesChan},
+				&handler.EnqueueRequestForObject{}).
 		For(&incv1alpha1.SDNShim{}).
 		Complete(r)
 }

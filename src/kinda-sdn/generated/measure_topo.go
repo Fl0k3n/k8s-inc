@@ -9,7 +9,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r1", 
         []*model.Link{
             model.NewLink("r7", "00:00:0a:00:00:00", "10.0.13.1", 24),
-            model.NewLink("tree-worker5", "00:00:0a:00:00:01", "10.0.0.1", 24),
+            model.NewLink("tree-worker11", "00:00:0a:00:00:01", "10.0.0.1", 24),
+            model.NewLink("tree-worker12", "00:00:0a:00:00:02", "10.0.1.1", 24),
         },
         "127.0.0.1:9560",
         "telemetry",
@@ -17,133 +18,195 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     dev1 := model.NewBmv2IncSwitch(
         "r7", 
         []*model.Link{
-            model.NewLink("r1", "00:00:0a:00:00:02", "10.0.13.2", 24),
-            model.NewLink("r2", "00:00:0a:00:00:03", "10.0.14.2", 24),
-            model.NewLink("r10", "00:00:0a:00:00:04", "10.0.19.1", 24),
+            model.NewLink("r1", "00:00:0a:00:00:03", "10.0.13.2", 24),
+            model.NewLink("r2", "00:00:0a:00:00:04", "10.0.14.2", 24),
+            model.NewLink("r10", "00:00:0a:00:00:05", "10.0.19.1", 24),
         },
         "127.0.0.1:9566",
         "telemetry",
     )
     dev2 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker5",
+            Name: "tree-worker11",
             Links: []*model.Link{
-                model.NewLink("r1", "00:00:0a:00:00:05", "10.0.0.2", 24),
+                model.NewLink("r1", "00:00:0a:00:00:06", "10.0.0.2", 24),
             },
         },	
     }
-    dev3 := model.NewBmv2IncSwitch(
+    dev3 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker12",
+            Links: []*model.Link{
+                model.NewLink("r1", "00:00:0a:00:00:07", "10.0.1.2", 24),
+            },
+        },	
+    }
+    dev4 := model.NewBmv2IncSwitch(
         "r2", 
         []*model.Link{
-            model.NewLink("r7", "00:00:0a:00:00:06", "10.0.14.1", 24),
-            model.NewLink("tree-worker4", "00:00:0a:00:00:07", "10.0.2.1", 24),
+            model.NewLink("r7", "00:00:0a:00:00:08", "10.0.14.1", 24),
+            model.NewLink("tree-worker9", "00:00:0a:00:00:09", "10.0.2.1", 24),
+            model.NewLink("tree-worker6", "00:00:0a:00:00:0a", "10.0.3.1", 24),
         },
         "127.0.0.1:9561",
         "forward",
     )
-    dev4 := model.NewBmv2IncSwitch(
+    dev5 := model.NewBmv2IncSwitch(
         "r10", 
         []*model.Link{
-            model.NewLink("r7", "00:00:0a:00:00:08", "10.0.19.2", 24),
-            model.NewLink("r8", "00:00:0a:00:00:09", "10.0.20.2", 24),
-            model.NewLink("r9", "00:00:0a:00:00:0a", "10.0.21.2", 24),
+            model.NewLink("r7", "00:00:0a:00:00:0b", "10.0.19.2", 24),
+            model.NewLink("r8", "00:00:0a:00:00:0c", "10.0.20.2", 24),
+            model.NewLink("r9", "00:00:0a:00:00:0d", "10.0.21.2", 24),
         },
         "127.0.0.1:9569",
         "forward",
     )
-    dev5 := &model.Host{
+    dev6 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker4",
+            Name: "tree-worker9",
             Links: []*model.Link{
-                model.NewLink("r2", "00:00:0a:00:00:0b", "10.0.2.2", 24),
+                model.NewLink("r2", "00:00:0a:00:00:0e", "10.0.2.2", 24),
             },
         },	
     }
-    dev6 := model.NewBmv2IncSwitch(
+    dev7 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker6",
+            Links: []*model.Link{
+                model.NewLink("r2", "00:00:0a:00:00:0f", "10.0.3.2", 24),
+            },
+        },	
+    }
+    dev8 := model.NewBmv2IncSwitch(
         "r8", 
         []*model.Link{
-            model.NewLink("r10", "00:00:0a:00:00:0e", "10.0.20.1", 24),
-            model.NewLink("r3", "00:00:0a:00:00:0c", "10.0.15.2", 24),
-            model.NewLink("r4", "00:00:0a:00:00:0d", "10.0.16.2", 24),
+            model.NewLink("r10", "00:00:0a:00:00:12", "10.0.20.1", 24),
+            model.NewLink("r3", "00:00:0a:00:00:10", "10.0.15.2", 24),
+            model.NewLink("r4", "00:00:0a:00:00:11", "10.0.16.2", 24),
         },
         "127.0.0.1:9567",
         "forward",
     )
-    dev7 := model.NewBmv2IncSwitch(
+    dev9 := model.NewBmv2IncSwitch(
         "r9", 
         []*model.Link{
-            model.NewLink("r10", "00:00:0a:00:00:11", "10.0.21.1", 24),
-            model.NewLink("r5", "00:00:0a:00:00:0f", "10.0.17.2", 24),
-            model.NewLink("r6", "00:00:0a:00:00:10", "10.0.18.2", 24),
+            model.NewLink("r10", "00:00:0a:00:00:15", "10.0.21.1", 24),
+            model.NewLink("r5", "00:00:0a:00:00:13", "10.0.17.2", 24),
+            model.NewLink("r6", "00:00:0a:00:00:14", "10.0.18.2", 24),
         },
         "127.0.0.1:9568",
         "telemetry",
     )
-    dev8 := model.NewBmv2IncSwitch(
+    dev10 := model.NewBmv2IncSwitch(
         "r3", 
         []*model.Link{
-            model.NewLink("r8", "00:00:0a:00:00:12", "10.0.15.1", 24),
-            model.NewLink("tree-worker3", "00:00:0a:00:00:13", "10.0.5.1", 24),
+            model.NewLink("r8", "00:00:0a:00:00:16", "10.0.15.1", 24),
+            model.NewLink("tree-worker5", "00:00:0a:00:00:17", "10.0.4.1", 24),
+            model.NewLink("tree-worker8", "00:00:0a:00:00:18", "10.0.5.1", 24),
         },
         "127.0.0.1:9562",
         "telemetry",
     )
-    dev9 := model.NewBmv2IncSwitch(
+    dev11 := model.NewBmv2IncSwitch(
         "r4", 
         []*model.Link{
-            model.NewLink("r8", "00:00:0a:00:00:14", "10.0.16.1", 24),
-            model.NewLink("tree-control-plane", "00:00:0a:00:00:15", "10.0.6.1", 24),
+            model.NewLink("r8", "00:00:0a:00:00:19", "10.0.16.1", 24),
+            model.NewLink("tree-control-plane", "00:00:0a:00:00:1a", "10.0.6.1", 24),
+            model.NewLink("tree-worker2", "00:00:0a:00:00:1b", "10.0.7.1", 24),
+            model.NewLink("tree-worker", "00:00:0a:00:00:1c", "10.0.8.1", 24),
         },
         "127.0.0.1:9563",
         "forward",
     )
-    dev10 := model.NewBmv2IncSwitch(
+    dev12 := model.NewBmv2IncSwitch(
         "r5", 
         []*model.Link{
-            model.NewLink("r9", "00:00:0a:00:00:16", "10.0.17.1", 24),
-            model.NewLink("tree-worker", "00:00:0a:00:00:17", "10.0.9.1", 24),
-            model.NewLink("tree-worker2", "00:00:0a:00:00:18", "10.0.10.1", 24),
+            model.NewLink("r9", "00:00:0a:00:00:1d", "10.0.17.1", 24),
+            model.NewLink("tree-worker7", "00:00:0a:00:00:1e", "10.0.9.1", 24),
+            model.NewLink("tree-worker10", "00:00:0a:00:00:1f", "10.0.10.1", 24),
         },
         "127.0.0.1:9564",
         "telemetry",
     )
-    dev11 := model.NewBmv2IncSwitch(
+    dev13 := model.NewBmv2IncSwitch(
         "r6", 
         []*model.Link{
-            model.NewLink("r9", "00:00:0a:00:00:19", "10.0.18.1", 24),
+            model.NewLink("r9", "00:00:0a:00:00:20", "10.0.18.1", 24),
+            model.NewLink("tree-worker4", "00:00:0a:00:00:21", "10.0.11.1", 24),
+            model.NewLink("tree-worker3", "00:00:0a:00:00:22", "10.0.12.1", 24),
         },
         "127.0.0.1:9565",
         "forward",
     )
-    dev12 := &model.Host{
-        BaseDevice: model.BaseDevice{
-            Name: "tree-worker3",
-            Links: []*model.Link{
-                model.NewLink("r3", "00:00:0a:00:00:1a", "10.0.5.2", 24),
-            },
-        },	
-    }
-    dev13 := &model.Host{
-        BaseDevice: model.BaseDevice{
-            Name: "tree-control-plane",
-            Links: []*model.Link{
-                model.NewLink("r4", "00:00:0a:00:00:1b", "10.0.6.2", 24),
-            },
-        },	
-    }
     dev14 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker",
+            Name: "tree-worker5",
             Links: []*model.Link{
-                model.NewLink("r5", "00:00:0a:00:00:1c", "10.0.9.2", 24),
+                model.NewLink("r3", "00:00:0a:00:00:23", "10.0.4.2", 24),
             },
         },	
     }
     dev15 := &model.Host{
         BaseDevice: model.BaseDevice{
+            Name: "tree-worker8",
+            Links: []*model.Link{
+                model.NewLink("r3", "00:00:0a:00:00:24", "10.0.5.2", 24),
+            },
+        },	
+    }
+    dev16 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-control-plane",
+            Links: []*model.Link{
+                model.NewLink("r4", "00:00:0a:00:00:25", "10.0.6.2", 24),
+            },
+        },	
+    }
+    dev17 := &model.Host{
+        BaseDevice: model.BaseDevice{
             Name: "tree-worker2",
             Links: []*model.Link{
-                model.NewLink("r5", "00:00:0a:00:00:1d", "10.0.10.2", 24),
+                model.NewLink("r4", "00:00:0a:00:00:26", "10.0.7.2", 24),
+            },
+        },	
+    }
+    dev18 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker",
+            Links: []*model.Link{
+                model.NewLink("r4", "00:00:0a:00:00:27", "10.0.8.2", 24),
+            },
+        },	
+    }
+    dev19 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker7",
+            Links: []*model.Link{
+                model.NewLink("r5", "00:00:0a:00:00:28", "10.0.9.2", 24),
+            },
+        },	
+    }
+    dev20 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker10",
+            Links: []*model.Link{
+                model.NewLink("r5", "00:00:0a:00:00:29", "10.0.10.2", 24),
+            },
+        },	
+    }
+    dev21 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker4",
+            Links: []*model.Link{
+                model.NewLink("r6", "00:00:0a:00:00:2a", "10.0.11.2", 24),
+            },
+        },	
+    }
+    dev22 := &model.Host{
+        BaseDevice: model.BaseDevice{
+            Name: "tree-worker3",
+            Links: []*model.Link{
+                model.NewLink("r6", "00:00:0a:00:00:2b", "10.0.12.2", 24),
             },
         },	
     }
@@ -175,7 +238,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     return &model.Topology{
         Devices: []model.Device{
-            dev0, dev1, dev2, dev3, dev4, dev5, dev6, dev7, dev8, dev9, dev10, dev11, dev12, dev13, dev14, dev15,
+            dev0, dev1, dev2, dev3, dev4, dev5, dev6, dev7, dev8, dev9, dev10, dev11, dev12, dev13, dev14, dev15, dev16, dev17, dev18, dev19, dev20, dev21, dev22,
         },
     }, []*model.P4ProgramDetails{
         prog0, prog1,
