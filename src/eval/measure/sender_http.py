@@ -8,7 +8,7 @@ import requests
 # python3 ./sender_http.py --server_url "http://0.0.0.0:8000/" --timeout_millis 1000 --request_period_millis 50 --response_size 800 --log_path "./log.csv"
 
 def parse_params():
-    parser = argparse.ArgumentParser(description='INTCollector client.')
+    parser = argparse.ArgumentParser(description='HTTP sender.')
     parser.add_argument("-u", "--server_url", default="http://0.0.0.0:8000/", type=str,
             help="URL on which HTTP server is running")
     parser.add_argument("-t", "--timeout_millis", default=1000, type=int,

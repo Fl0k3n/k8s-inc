@@ -9,7 +9,7 @@ spec:
   deployments:
     - name: receiver
       template:
-        replicas: 1
+        replicas: 2
         selector:
           matchLabels:
             app: receiver-udp
@@ -21,8 +21,9 @@ spec:
             terminationGracePeriodSeconds: 0
             containers:
               - name: receiver
-                image: flok3n/latency_receiver_udp:1.0.2
-                command: ["python3", "/latency_receiver.py", "8901", "950"]
+                image: flok3n/latency_receiver_udp:1.0.4
+                command:
+                  ["python3", "/latency_receiver.py", "8901", "950", "10", "1"]
                 ports:
                   - containerPort: 8901
                     protocol: UDP
@@ -37,10 +38,11 @@ spec:
             labels:
               app: snd
           spec:
+            nodeName: { w1 }
             terminationGracePeriodSeconds: 1
             containers:
               - name: sender
-                image: flok3n/latency_sender_udp:1.0.2
+                image: flok3n/latency_sender_udp:1.0.4
                 imagePullPolicy: Always
                 command:
                   [
@@ -48,7 +50,7 @@ spec:
                     "/latency_sender.py",
                     "latency-receiver-udp.default.svc.cluster.local",
                     "8901",
-                    "8900",
+                    "1000",
                     "/logs/latency_udp.csv",
                     "950",
                     "20",

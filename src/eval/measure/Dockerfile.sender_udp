@@ -1,5 +1,5 @@
 FROM python:3.10.13-alpine3.18
 
-COPY ./latency_sender.py .
+COPY ./latency_sender_udp.py ./latency_sender.py
 
 ENTRYPOINT ["python3", "/latency_sender.py"]

@@ -21,7 +21,7 @@ spec:
             terminationGracePeriodSeconds: 0
             containers:
               - name: receiver-http
-                image: flok3n/latency_receiver_http:1.0.0
+                image: flok3n/latency_receiver_http:1.0.5
                 command:
                   [
                     "python3",
@@ -47,10 +47,11 @@ spec:
             labels:
               app: sender-http
           spec:
+            nodeName: { w1 }
             terminationGracePeriodSeconds: 1
             containers:
               - name: sender-http
-                image: flok3n/latency_sender_http:1.0.0
+                image: flok3n/latency_sender_http:1.0.5
                 imagePullPolicy: Always
                 command:
                   [

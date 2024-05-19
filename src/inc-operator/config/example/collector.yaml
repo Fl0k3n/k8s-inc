@@ -6,7 +6,7 @@ spec:
   apiContainerPort: 8000
   reportingContainerPort: 6000
   podSpec:
-    nodeName: tree-worker3
+    nodeName: { w7 }
     containers:
       - name: nodeapp
         image: flok3n/int-collector:1.0.3
@@ -19,7 +19,7 @@ spec:
             "-p",
             "8000",
             "-w",
-            "30",
+            "5",
             "-o",
             "/logs/reports.csv",
           ]

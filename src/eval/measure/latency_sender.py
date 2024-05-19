@@ -1,9 +1,9 @@
-from io import TextIOWrapper
+import queue
 import socket
 import sys
 import threading
-import queue
 import time
+from io import TextIOWrapper
 
 ID_SIZE = 8
 period_millis = 100
@@ -65,7 +65,7 @@ def sender(log_file: TextIOWrapper):
                         dropped_repeated_or_out_of_order += 1
                     s_id_, snd_time = msgs[0]
                 msgs.pop(0)
-                latency = (rcv_time - snd_time) / 2
+                latency = rcv_time - snd_time
                 latencies.append(latency)
                 log=f'{time.time()},{latency},{dropped_repeated_or_out_of_order}'
                 print(log)

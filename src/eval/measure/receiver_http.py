@@ -1,6 +1,6 @@
 import argparse
+import asyncio
 import random
-import time
 
 from fastapi import FastAPI, Response
 from pydantic import BaseModel
@@ -24,7 +24,7 @@ class RawResponse(Response):
     media_type = "binary/octet-stream"
 
     def render(self, content: bytes) -> bytes:
-        return bytes([b ^ 0x54 for b in content])
+        return bytes([b for b in content])
 
 if __name__ == "__main__":
     import uvicorn
@@ -36,10 +36,10 @@ if __name__ == "__main__":
 
     app = FastAPI()
     @app.post("/")
-    async def handle_request(data: Req) -> str:
+    async def handle_request(data: Req):
         delay = max(random.normalvariate(mu, std), 0)
         if delay > 0:
-            time.sleep(delay / 1000)
+            await asyncio.sleep(delay / 1000)
         resp = random.randbytes(data.response_size)
         return RawResponse(content=resp)
         
