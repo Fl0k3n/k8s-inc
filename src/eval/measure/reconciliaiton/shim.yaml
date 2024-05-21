@@ -1,0 +1,9 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: SDNShim
+metadata:
+  name: kinda-sdn-shim
+spec:
+  sdn:
+    type: kinda-sdn
+    grpcAddr: "127.0.0.1:9001"
+    telemetryServiceGrpcAddr: "127.0.0.1:9001"

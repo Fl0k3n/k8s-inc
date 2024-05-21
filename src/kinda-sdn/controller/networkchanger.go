@@ -18,6 +18,10 @@ type AddDevicesRequest struct {
 	Devices []DeviceItem `json:"devices"`
 }
 
+type DeleteDeviceRequest struct {
+	Name string `json:"name"`
+}
+
 type ChangeProgramRequest struct {
 	DeviceName string `json:"deviceName"`
 	ProgramName string `json:"programName"`
@@ -89,6 +93,23 @@ func (k *KindaSdn) AddDevicesHandler(w http.ResponseWriter, req *http.Request) {
 	sendBasicResponse(w, http.StatusOK, "Devices added")
 }
 
+func (k *KindaSdn) DeleteDeviceHandler(w http.ResponseWriter, req *http.Request) {
+	if req.Method != "POST" {
+		w.WriteHeader(http.StatusMethodNotAllowed)		
+		return
+	}
+	body := DeleteDeviceRequest{}
+	if err := json.NewDecoder(req.Body).Decode(&body); err != nil {
+		sendBasicResponse(w, http.StatusBadRequest, "Failed to parse")
+		return
+	}
+	if err := k.RemoveDevices([]model.DeviceName{body.Name}); err != nil {
+		sendBasicResponse(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	sendBasicResponse(w, http.StatusOK, "Device removed")
+}
+
 func (k *KindaSdn) ChangeProgramHandler(w http.ResponseWriter, req *http.Request) {
 	if req.Method != "POST" {
 		w.WriteHeader(http.StatusMethodNotAllowed)		
@@ -104,4 +125,8 @@ func (k *KindaSdn) ChangeProgramHandler(w http.ResponseWriter, req *http.Request
 		return
 	}
 	sendBasicResponse(w, http.StatusOK, "Program changed")
+}
+
+func (k *KindaSdn) HealthCheckHandler(w http.ResponseWriter, req *http.Request) {
+	sendBasicResponse(w, http.StatusOK, "OK")
 }

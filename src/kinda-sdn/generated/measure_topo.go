@@ -9,8 +9,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r1", 
         []*model.Link{
             model.NewLink("r7", "00:00:0a:00:00:00", "10.0.13.1", 24),
-            model.NewLink("tree-worker11", "00:00:0a:00:00:01", "10.0.0.1", 24),
-            model.NewLink("tree-worker12", "00:00:0a:00:00:02", "10.0.1.1", 24),
+            model.NewLink("tree-worker2", "00:00:0a:00:00:01", "10.0.0.1", 24),
+            model.NewLink("tree-worker11", "00:00:0a:00:00:02", "10.0.1.1", 24),
         },
         "127.0.0.1:9560",
         "telemetry",
@@ -27,7 +27,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     )
     dev2 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker11",
+            Name: "tree-worker2",
             Links: []*model.Link{
                 model.NewLink("r1", "00:00:0a:00:00:06", "10.0.0.2", 24),
             },
@@ -35,7 +35,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev3 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker12",
+            Name: "tree-worker11",
             Links: []*model.Link{
                 model.NewLink("r1", "00:00:0a:00:00:07", "10.0.1.2", 24),
             },
@@ -45,8 +45,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r2", 
         []*model.Link{
             model.NewLink("r7", "00:00:0a:00:00:08", "10.0.14.1", 24),
-            model.NewLink("tree-worker9", "00:00:0a:00:00:09", "10.0.2.1", 24),
-            model.NewLink("tree-worker6", "00:00:0a:00:00:0a", "10.0.3.1", 24),
+            model.NewLink("tree-worker3", "00:00:0a:00:00:09", "10.0.2.1", 24),
+            model.NewLink("tree-worker5", "00:00:0a:00:00:0a", "10.0.3.1", 24),
         },
         "127.0.0.1:9561",
         "forward",
@@ -63,7 +63,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     )
     dev6 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker9",
+            Name: "tree-worker3",
             Links: []*model.Link{
                 model.NewLink("r2", "00:00:0a:00:00:0e", "10.0.2.2", 24),
             },
@@ -71,7 +71,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev7 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker6",
+            Name: "tree-worker5",
             Links: []*model.Link{
                 model.NewLink("r2", "00:00:0a:00:00:0f", "10.0.3.2", 24),
             },
@@ -101,8 +101,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r3", 
         []*model.Link{
             model.NewLink("r8", "00:00:0a:00:00:16", "10.0.15.1", 24),
-            model.NewLink("tree-worker5", "00:00:0a:00:00:17", "10.0.4.1", 24),
-            model.NewLink("tree-worker8", "00:00:0a:00:00:18", "10.0.5.1", 24),
+            model.NewLink("tree-worker", "00:00:0a:00:00:17", "10.0.4.1", 24),
+            model.NewLink("tree-worker4", "00:00:0a:00:00:18", "10.0.5.1", 24),
         },
         "127.0.0.1:9562",
         "telemetry",
@@ -112,8 +112,8 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         []*model.Link{
             model.NewLink("r8", "00:00:0a:00:00:19", "10.0.16.1", 24),
             model.NewLink("tree-control-plane", "00:00:0a:00:00:1a", "10.0.6.1", 24),
-            model.NewLink("tree-worker2", "00:00:0a:00:00:1b", "10.0.7.1", 24),
-            model.NewLink("tree-worker", "00:00:0a:00:00:1c", "10.0.8.1", 24),
+            model.NewLink("tree-worker8", "00:00:0a:00:00:1b", "10.0.7.1", 24),
+            model.NewLink("tree-worker6", "00:00:0a:00:00:1c", "10.0.8.1", 24),
         },
         "127.0.0.1:9563",
         "forward",
@@ -132,15 +132,15 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
         "r6", 
         []*model.Link{
             model.NewLink("r9", "00:00:0a:00:00:20", "10.0.18.1", 24),
-            model.NewLink("tree-worker4", "00:00:0a:00:00:21", "10.0.11.1", 24),
-            model.NewLink("tree-worker3", "00:00:0a:00:00:22", "10.0.12.1", 24),
+            model.NewLink("tree-worker12", "00:00:0a:00:00:21", "10.0.11.1", 24),
+            model.NewLink("tree-worker9", "00:00:0a:00:00:22", "10.0.12.1", 24),
         },
         "127.0.0.1:9565",
         "forward",
     )
     dev14 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker5",
+            Name: "tree-worker",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:23", "10.0.4.2", 24),
             },
@@ -148,7 +148,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev15 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker8",
+            Name: "tree-worker4",
             Links: []*model.Link{
                 model.NewLink("r3", "00:00:0a:00:00:24", "10.0.5.2", 24),
             },
@@ -164,7 +164,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev17 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker2",
+            Name: "tree-worker8",
             Links: []*model.Link{
                 model.NewLink("r4", "00:00:0a:00:00:26", "10.0.7.2", 24),
             },
@@ -172,7 +172,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev18 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker",
+            Name: "tree-worker6",
             Links: []*model.Link{
                 model.NewLink("r4", "00:00:0a:00:00:27", "10.0.8.2", 24),
             },
@@ -196,7 +196,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev21 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker4",
+            Name: "tree-worker12",
             Links: []*model.Link{
                 model.NewLink("r6", "00:00:0a:00:00:2a", "10.0.11.2", 24),
             },
@@ -204,7 +204,7 @@ func Measure_gRPC_topo() (*model.Topology, []*model.P4ProgramDetails) {
     }
     dev22 := &model.Host{
         BaseDevice: model.BaseDevice{
-            Name: "tree-worker3",
+            Name: "tree-worker9",
             Links: []*model.Link{
                 model.NewLink("r6", "00:00:0a:00:00:2b", "10.0.12.2", 24),
             },

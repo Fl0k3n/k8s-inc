@@ -58,8 +58,10 @@ func (k *KindaSdn) SubscribeNetworkChanges(req *empty.Empty, respStream pb.SdnFr
 	k.numUpdateListeners.Add(1)
 	defer k.numUpdateListeners.Add(-1)
 	for msg := range k.networkUpdatesChan {
+		fmt.Println("Sending network update notification")
 		if err := respStream.Send(msg); err != nil {
 			fmt.Printf("Failed to network state update %e\n", err)
+			k.networkUpdatesChan <- msg
 			return nil
 		}
 	}

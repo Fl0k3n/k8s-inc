@@ -317,7 +317,7 @@ func newStatHandler(
 func (s *StatHandler) Run() {
 	duration := time.Duration(s.refreshPeriodMillis) * time.Millisecond
 	ticker := time.NewTicker(time.Duration(duration))
-	logPath := "/home/flok3n/develop/k8s_inc_analysis/data/http3/logs%d.json"
+	logPath := "/home/flok3n/develop/k8s_inc_analysis/data/new_http_tcp3/logs%d.json"
 	i := 0
 	go func() {
 		for {

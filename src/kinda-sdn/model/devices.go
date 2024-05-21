@@ -1,6 +1,9 @@
 package model
 
-import "fmt"
+import (
+	"fmt"
+	"slices"
+)
 
 type DeviceType = string
 type DeviceName = string
@@ -30,6 +33,7 @@ type Link struct {
 type Device interface {
 	GetName() DeviceName
 	GetLinks() []*Link
+	RemoveLink(DeviceName)
 	AddLink(*Link)
 	GetType() DeviceType
 	GetPortNumberTo(DeviceName) (p int, ok bool)
@@ -62,6 +66,12 @@ func (b *BaseDevice) GetLinks() []*Link {
 
 func (b *BaseDevice) AddLink(link *Link) {
 	b.Links = append(b.Links, link)
+}
+
+func (b *BaseDevice) RemoveLink(peer DeviceName) {
+	b.Links = slices.DeleteFunc(b.Links, func(l *Link) bool {
+		return l.To == peer
+	})
 }
 
 // 0 based, increment if used in bmv2

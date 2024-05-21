@@ -19,6 +19,7 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"sync"
 	"time"
 
@@ -66,6 +67,9 @@ type SDNShimReconciler struct {
 	networkUpdatesChan chan event.GenericEvent
 	watcherStopChan chan struct{}
 }
+
+var start time.Time = time.Time{}
+var lastTopologyUpdateTimeMillis = int64(0)
 
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=sdnshims,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups=inc.kntp.com,resources=sdnshims/status,verbs=get;update;patch
@@ -161,6 +165,10 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	storedTopo := &incv1alpha1.Topology{}
 	if err := r.Get(ctx, TOPOLOGY_KEY, storedTopo); err != nil {
 		if apierrors.IsNotFound(err) {
+			if err := ctrl.SetControllerReference(shimConfig, topo, r.Scheme); err != nil {
+				log.Error(err, "Failed to set controller reference to topology")
+				return ctrl.Result{}, err
+			}
 			if err := r.Client.Create(ctx, topo); err != nil {
 				log.Error(err, "Failed to create topology CR")
 				return ctrl.Result{}, err
@@ -171,9 +179,13 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	} else if r.topologyChanged(storedTopo, topo) {
 		log.Info("Topology changed, updating")
 		storedTopo.Spec.Graph = topo.Spec.Graph
+		s := time.Now()
 		if err := r.Client.Update(ctx, storedTopo); err != nil {
 			return ctrl.Result{}, err
 		}
+		took := time.Since(s).Milliseconds()
+		fmt.Printf("\n\nUpdate took %dms\n\n", took)
+		lastTopologyUpdateTimeMillis = took
 	}
 
 	switchList := &incv1alpha1.IncSwitchList{}
@@ -236,7 +248,12 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	for _, swName := range switchesToAdd.Slice() {
 		if details, ok := switchDetailsResp.Details[swName]; ok {
 			desiredProgramNames.Insert(details.InstalledProgram)
-			if err := r.Client.Create(ctx, r.buildIncSwitchCR(details)); err != nil {
+			incSwitch := r.buildIncSwitchCR(details)
+			if err := ctrl.SetControllerReference(shimConfig, incSwitch, r.Scheme); err != nil {
+				log.Error(err, "failed to set controller reference to incSwitch")
+				return ctrl.Result{}, err
+			}
+			if err := r.Client.Create(ctx, incSwitch); err != nil {
 				log.Error(err, "Failed to create INC switch CR")
 				return ctrl.Result{}, err
 			}
@@ -282,6 +299,10 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		desiredPrograms[programName] = r.buildP4ProgramCR(programName, programDetailsResp)
 	}
 	for _, programName := range programsToAdd.Slice() {
+		if err := ctrl.SetControllerReference(shimConfig, desiredPrograms[programName], r.Scheme); err != nil {
+			log.Error(err, "failed to set controller reference to p4 program")
+			return ctrl.Result{}, err
+		}
 		if err := r.Create(ctx, desiredPrograms[programName]); err != nil {
 			log.Error(err, "Failed to create p4program")					
 			return ctrl.Result{}, err
@@ -306,8 +327,23 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 		log.Error(err, "Failed to update shim status")
 		return ctrl.Result{}, err
 	}
+	notifyReconciledForEvaluation() // TODO: delete it
+	// TODO: delete it
+	if !start.IsZero() {
+		delta := time.Since(start).Milliseconds()
+		fmt.Printf("\n\nTook: %dms\n\n", delta)
+		start = time.Time{}
+	}
 	log.Info("Reconciled SDNShim")
 	return ctrl.Result{}, nil
+}
+
+func notifyReconciledForEvaluation() {
+	// TODO: this is for evaluation only
+	r, err := http.Get(fmt.Sprintf("http://127.0.0.1:16423/done?etcd-update-time=%d", lastTopologyUpdateTimeMillis))
+	if err != nil || r.StatusCode != 200 {
+		fmt.Printf("Failed to notify about done reconciliation: %v", err)
+	}
 }
 
 func (r *SDNShimReconciler) SetupWithManager(mgr ctrl.Manager) error {
@@ -492,6 +528,7 @@ func (r *SDNShimReconciler) watchSdnNetworkUpdates(
 			r.sdnConnectorLock.Unlock()
 			return
 		}
+		start = time.Now()
 		r.networkUpdatesChan <- event.GenericEvent{Object: shim}
 	}
 }

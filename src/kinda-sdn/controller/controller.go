@@ -3,6 +3,7 @@ package controller
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync/atomic"
 	"time"
 
@@ -130,8 +131,28 @@ func (k *KindaSdn) AddDevices(devices []model.Device) error {
 	return nil
 }
 
-func (k *KindaSdn) RemoveDevices(deviceNames []model.DeviceName) {
-	// TODO
+func (k *KindaSdn) RemoveDevices(deviceNames []model.DeviceName) error {
+	deletedDevices := []model.Device{}
+	k.topo.Devices = slices.DeleteFunc(k.topo.Devices, func(d model.Device) bool {
+		if slices.Contains(deviceNames, d.GetName()) {
+			deletedDevices = append(deletedDevices, d)
+			return true
+		}
+		return false
+	})
+	if len(deletedDevices) < len(deviceNames) {
+		return fmt.Errorf("some device wasn't deleted")
+	}
+	G := model.TopologyToGraph(k.topo)
+	for _, dev := range deletedDevices {
+		for _, link	:= range dev.GetLinks() {
+			G[link.To].RemoveLink(dev.GetName())
+		}
+	}
+	k.notifyNetworkChanged(&pb.NetworkChange{
+		Change: &pb.NetworkChange_TopologyChange{},
+	})
+	return nil
 }
 
 func (k *KindaSdn) ChangeProgram(deviceName model.DeviceName, programName string) error {
