@@ -23,7 +23,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	v1 "k8s.io/api/core/v1"
@@ -317,7 +316,7 @@ func newStatHandler(
 func (s *StatHandler) Run() {
 	duration := time.Duration(s.refreshPeriodMillis) * time.Millisecond
 	ticker := time.NewTicker(time.Duration(duration))
-	logPath := "/home/flok3n/develop/k8s_inc_analysis/data/new_http_tcp3/logs%d.json"
+	// logPath := "/home/flok3n/develop/k8s_inc_analysis/data/new_udp_udp2/logs%d.json"
 	i := 0
 	go func() {
 		for {
@@ -352,8 +351,8 @@ func (s *StatHandler) Run() {
 				stats.Status.MetricsSummary = s.convertToK8sRepr(metrics)
 				
 				// TODO: remove this, it's for eval only
-				data, _ := json.Marshal(stats.Status.MetricsSummary)
-				os.WriteFile(fmt.Sprintf(logPath, i), data, 0644)
+				// data, _ := json.Marshal(stats.Status.MetricsSummary)
+				// os.WriteFile(fmt.Sprintf(logPath, i), data, 0644)
 				i += 1
 
 				s.client.Status().Update(ctx, stats)

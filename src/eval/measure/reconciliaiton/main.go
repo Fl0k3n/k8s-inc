@@ -175,10 +175,10 @@ func changeProgram() {
 func main() {
 	resultsFile := "/home/flok3n/develop/k8s_inc_analysis/data/shim_eval/reconciliation_time_all_diffrent_fraction.csv"
 	retries := 3
-	minK := 20
+	minK := 6
 	maxK := 30
-	incSwitchFractions := []float32{0.2}
-	incSwitchFractionStrs := []string{"0.2"}
+	incSwitchFractions := []float32{0.2, 0.8}
+	incSwitchFractionStrs := []string{"0.2", "0.8"}
 	// incSwitchFractions := []float32{0.2, 0.5, 0.8}
 	// incSwitchFractionStrs := []string{"0.2", "0.5", "0.8"}
 	f, err := os.Create(resultsFile)
@@ -187,7 +187,8 @@ func main() {
 	}
 	defer f.Close()
 	f.WriteString("mode_key,k,inc_switch_fraction,scenario,topo_update_time_ms,total_time_ms\n")
-	scenarios := []string{"add-device", "remove-device-inc-switch", "change-program"}
+	scenarios := []string{"change-program"}
+	// scenarios := []string{"add-device", "remove-device-inc-switch", "change-program"}
 	// scenarios := []string{"add-device", "remove-device-inc-switch", "remove-device-net", "change-program"}
 	// scenarios := []string{"change-program"}
 

@@ -1,0 +1,54 @@
+apiVersion: inc.kntp.com/v1alpha1
+kind: InternalInNetworkTelemetryEndpoints
+metadata:
+  creationTimestamp: "2024-05-30T10:53:54Z"
+  finalizers:
+    - inc.kntp.com/iint-finalizer
+  generation: 5
+  name: intdepl-http
+  namespace: default
+  ownerReferences:
+    - apiVersion: inc.kntp.com/v1alpha1
+      blockOwnerDeletion: true
+      controller: true
+      kind: InternalInNetworkTelemetryDeployment
+      name: intdepl-http
+      uid: d5c0713a-9959-4876-ad4b-f51cf962ce4e
+  resourceVersion: "3107"
+  uid: 432f48ad-21ef-4083-a0ab-60991b23ce61
+spec:
+  collectionId: main-collection
+  collectorRef:
+    name: collector
+  deploymentEndpoints:
+    - deploymentName: receiver
+      entries:
+        - entryStatus: ready
+          nodeName: tree-worker10
+          podIp: 10.244.12.2
+          podReference:
+            apiVersion: v1
+            kind: Pod
+            name: intdepl-http-receiver-5994c4cb6b-9tnqt
+            namespace: default
+            uid: f202dc46-0473-4bd3-bf8a-edfabb968219
+        - entryStatus: ready
+          nodeName: tree-worker9
+          podIp: 10.244.9.2
+          podReference:
+            apiVersion: v1
+            kind: Pod
+            name: intdepl-http-receiver-5994c4cb6b-c6hhx
+            namespace: default
+            uid: 246d85ce-7502-4a7f-9c7b-b0297e98b21f
+    - deploymentName: sender
+      entries:
+        - entryStatus: ready
+          nodeName: tree-worker2
+          podIp: 10.244.4.2
+          podReference:
+            apiVersion: v1
+            kind: Pod
+            name: intdepl-http-sender-7bdc9f7c6-pq2mn
+            namespace: default
+            uid: 676fee3c-88f7-4da9-9f20-881d69425fb3

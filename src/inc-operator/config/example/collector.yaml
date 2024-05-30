@@ -6,7 +6,7 @@ spec:
   apiContainerPort: 8000
   reportingContainerPort: 6000
   podSpec:
-    nodeName: { w7 }
+    nodeName: { w6 }
     containers:
       - name: nodeapp
         image: flok3n/int-collector:1.0.3
