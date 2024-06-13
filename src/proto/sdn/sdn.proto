@@ -28,6 +28,7 @@ message Device {
     string name = 1;
     DeviceType deviceType = 2;
     repeated Link links = 3;
+    int32 index = 4;
 }
 
 message TopologyResponse {

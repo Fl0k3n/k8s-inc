@@ -52,8 +52,10 @@ func main() {
 	var metricsAddr string
 	var enableLeaderElection bool
 	var probeAddr string
+	var partitionSize int
 	flag.StringVar(&metricsAddr, "metrics-bind-address", ":8080", "The address the metric endpoint binds to.")
 	flag.StringVar(&probeAddr, "health-probe-bind-address", ":8081", "The address the probe endpoint binds to.")
+	flag.IntVar(&partitionSize, "partition-size", 1000, "max partition size of topology item in numer of devices.")
 	flag.BoolVar(&enableLeaderElection, "leader-elect", false,
 		"Enable leader election for controller manager. "+
 			"Enabling this will ensure there is only one active controller manager.")
@@ -92,6 +94,7 @@ func main() {
 	if err = (&controllers.SDNShimReconciler{
 		Client: mgr.GetClient(),
 		Scheme: mgr.GetScheme(),
+		TOPOLOGY_MAX_PARTITION_SIZE: int32(partitionSize),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "SDNShim")
 		os.Exit(1)

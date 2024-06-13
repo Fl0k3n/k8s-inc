@@ -57,6 +57,9 @@ func runHttpNetworkChangeServer(controller *controller.KindaSdn, addr string) {
 
 func runInReconciliationEvaluationMode() {
 	topo, programDefinitions := generated.FatTreeFakeCluster(*fatTreeTopoK, float32(*fatTreeIncSwitchFraction))
+	for i, dev := range topo.Devices {
+		dev.SetIndex(i)
+	}
 	programRegistry := programs.NewRegistry()
 	telemetryService := telemetry.NewService(programRegistry)
 	for _, program := range programDefinitions {

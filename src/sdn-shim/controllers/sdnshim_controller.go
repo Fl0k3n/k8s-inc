@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 	"google.golang.org/grpc/keepalive"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
-	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -66,6 +66,7 @@ type SDNShimReconciler struct {
 	sdnConn *grpc.ClientConn
 	networkUpdatesChan chan event.GenericEvent
 	watcherStopChan chan struct{}
+	TOPOLOGY_MAX_PARTITION_SIZE int32
 }
 
 var start time.Time = time.Time{}
@@ -162,26 +163,49 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 	topo := r.buildClusterTopoCR(sdnTopo)
 
-	storedTopo := &incv1alpha1.Topology{}
-	if err := r.Get(ctx, TOPOLOGY_KEY, storedTopo); err != nil {
-		if apierrors.IsNotFound(err) {
-			if err := ctrl.SetControllerReference(shimConfig, topo, r.Scheme); err != nil {
+	storedTopo := &incv1alpha1.TopologyList{}
+	if err := r.List(ctx, storedTopo, &client.ListOptions{Limit: 999999}); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	if len(storedTopo.Items) == 0 {
+		for i := range topo {
+			if err := ctrl.SetControllerReference(shimConfig, &topo[i], r.Scheme); err != nil {
 				log.Error(err, "Failed to set controller reference to topology")
 				return ctrl.Result{}, err
 			}
-			if err := r.Client.Create(ctx, topo); err != nil {
+			if err := r.Client.Create(ctx, &topo[i]); err != nil {
 				log.Error(err, "Failed to create topology CR")
 				return ctrl.Result{}, err
 			}
-			return ctrl.Result{Requeue: true}, nil
 		}
-		return ctrl.Result{}, err
-	} else if r.topologyChanged(storedTopo, topo) {
+		return ctrl.Result{Requeue: true}, nil
+	} else if len(storedTopo.Items) != len(topo) {
+		return ctrl.Result{RequeueAfter: 100*time.Millisecond}, nil
+	}
+
+	if changedIdxs := r.topologyChanged(storedTopo, topo); len(changedIdxs) > 0 {
 		log.Info("Topology changed, updating")
-		storedTopo.Spec.Graph = topo.Spec.Graph
 		s := time.Now()
-		if err := r.Client.Update(ctx, storedTopo); err != nil {
-			return ctrl.Result{}, err
+		wg := sync.WaitGroup{}
+		wg.Add(len(changedIdxs))
+		errors := make([]error, len(changedIdxs))
+		for i := range errors {
+			errors[i] = nil
+		}
+		for i, idx := range changedIdxs {
+			goroIdx := i
+			topoidx := idx
+			go func() {
+				errors[goroIdx] = r.Client.Update(ctx, &storedTopo.Items[topoidx])
+				wg.Done()
+			}()
+		}
+		wg.Wait()
+		for _, err := range errors {
+			if err != nil {
+				return ctrl.Result{}, err
+			}
 		}
 		took := time.Since(s).Milliseconds()
 		fmt.Printf("\n\nUpdate took %dms\n\n", took)
@@ -189,7 +213,7 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	switchList := &incv1alpha1.IncSwitchList{}
-	if err := r.List(ctx, switchList); err != nil {
+	if err := r.List(ctx, switchList, &client.ListOptions{Limit: 999999}); err != nil {
 		log.Error(err, "Failed to list incswitches")
 		return ctrl.Result{}, err
 	}
@@ -201,9 +225,11 @@ func (r *SDNShimReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	}
 
 	desiredSwitchNames := sets.New[string](0)
-	for _, dev := range storedTopo.Spec.Graph {
-		if dev.DeviceType == incv1alpha1.INC_SWITCH {
-			desiredSwitchNames.Insert(dev.Name)
+	for _, part := range storedTopo.Items {
+		for _, dev := range part.Spec.Graph {
+			if dev.DeviceType == incv1alpha1.INC_SWITCH {
+				desiredSwitchNames.Insert(dev.Name)
+			}
 		}
 	}
 	switchesToAdd := desiredSwitchNames.Difference(presentSwitchNames)
@@ -386,52 +412,91 @@ func deviceTypeFromProto(dt pb.DeviceType) incv1alpha1.DeviceType {
 	}
 }
 
-func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse) *incv1alpha1.Topology {
-	graph := make([]incv1alpha1.NetworkDevice, len(topo.Graph))
-	for i, dev := range topo.Graph {
-		links := make([]incv1alpha1.Link, len(dev.Links))
-		for j, link := range dev.Links {
-			links[j] = incv1alpha1.Link{
-				PeerName: link.PeerName,
+func (r *SDNShimReconciler) buildClusterTopoCR(topo *pb.TopologyResponse) []incv1alpha1.Topology {
+	lastIdx := topo.Graph[len(topo.Graph)-1].Index
+	res := make([]incv1alpha1.Topology, 1 + (lastIdx) / r.TOPOLOGY_MAX_PARTITION_SIZE)
+	cur := 0
+
+	for i := 0; i < len(res); i++ {
+		graph := make([]incv1alpha1.NetworkDevice, 0, r.TOPOLOGY_MAX_PARTITION_SIZE)
+		maxPartitionIdx := int32((i + 1) * int(r.TOPOLOGY_MAX_PARTITION_SIZE) - 1)
+		for ; cur < len(topo.Graph); cur++ {
+			dev := topo.Graph[cur]
+			if dev.Index > maxPartitionIdx {
+				break
 			}
+			links := make([]incv1alpha1.Link, len(dev.Links))
+			for j, link := range dev.Links {
+				links[j] = incv1alpha1.Link{
+					PeerName: link.PeerName,
+				}
+			}
+			graph = append(graph, incv1alpha1.NetworkDevice{
+				Name: dev.Name,
+				DeviceType: deviceTypeFromProto(dev.DeviceType),
+				Links: links,
+			})
 		}
-		graph[i] = incv1alpha1.NetworkDevice{
-			Name: dev.Name,
-			DeviceType: deviceTypeFromProto(dev.DeviceType),
-			Links: links,
+		res[i] = incv1alpha1.Topology{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: fmt.Sprintf("%s%d", TOPOLOGY_KEY.Name, i),
+				Namespace: TOPOLOGY_KEY.Namespace,
+			},
+			Spec: incv1alpha1.TopologySpec{
+				Graph: graph,
+			},
 		}
-	}
-	
-	res := &incv1alpha1.Topology{
-		ObjectMeta: metav1.ObjectMeta{
-			Name: TOPOLOGY_KEY.Name,
-			Namespace: TOPOLOGY_KEY.Namespace,
-		},
-		Spec: incv1alpha1.TopologySpec{
-			Graph: graph,
-		},
 	}
 	return res
 }
 
-func (r *SDNShimReconciler) topologyChanged(previous *incv1alpha1.Topology, current *incv1alpha1.Topology) bool {
-	if len(previous.Spec.Graph) != len(current.Spec.Graph) {
-		return true
+func (r *SDNShimReconciler) topologyChanged(previous *incv1alpha1.TopologyList, current []incv1alpha1.Topology) []int {
+	prev := make([]*incv1alpha1.Topology, len(previous.Items))
+	idxRemap := make([]int, len(previous.Items))
+	for i, p := range previous.Items {
+		idx, _ := strconv.Atoi(p.Name[len(TOPOLOGY_KEY.Name):])
+		prev[idx] = &previous.Items[i]
+		idxRemap[idx] = i
 	}
-	// we assume that order shouldn't change
-	for i := range previous.Spec.Graph {
-		prev, cur := previous.Spec.Graph[i], current.Spec.Graph[i]
-		if prev.Name != cur.Name || prev.DeviceType != cur.DeviceType || len(prev.Links) != len(cur.Links) {
-			return true
-		}
-		for j := range prev.Links {
-			l1, l2 := prev.Links[j], cur.Links[j]
-			if l1.PeerName != l2.PeerName {
-				return true
+
+	if len(prev) != len(current) {
+		panic("TODO")
+	}
+	res := []int{}
+
+	for i := range prev {
+		p := prev[i]
+		c := current[i]
+		if len(p.Spec.Graph) != len(c.Spec.Graph) {
+			res = append(res, i)
+		} else {
+			for j := range p.Spec.Graph {
+				pd := p.Spec.Graph[j]
+				cd := c.Spec.Graph[j]
+				if pd.Name != cd.Name || pd.DeviceType != cd.DeviceType || len(pd.Links) != len(cd.Links) {
+					res = append(res, i)
+					break
+				}
+				found := false
+				for k := range pd.Links {
+					l1, l2 := pd.Links[k], cd.Links[k]
+					if l1.PeerName != l2.PeerName {
+						res = append(res, i)
+						found = true
+						break
+					}
+				}
+				if found {
+					break
+				}
 			}
 		}
 	}
-	return false
+	for i := range res {
+		previous.Items[idxRemap[res[i]]].Spec.Graph = current[res[i]].Spec.Graph
+		res[i] = idxRemap[res[i]]
+	}
+	return res
 }
 
 func (r *SDNShimReconciler) buildIncSwitchCR(details *pb.SwitchDetails) *incv1alpha1.IncSwitch {

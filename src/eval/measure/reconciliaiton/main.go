@@ -120,9 +120,9 @@ func createShimResource() Cleaner {
 	}
 }
 
-func runSdnShim() Cleaner {
+func runSdnShim(partitionSize int) Cleaner {
 	path := "/home/flok3n/develop/k8s_inc/src/sdn-shim/sdn-shim"
-	sdnShimCmd := exec.Command(path)
+	sdnShimCmd := exec.Command(path, fmt.Sprintf("--partition-size=%d", partitionSize))
 	stdOut, _ := sdnShimCmd.StderrPipe()
 	if err := sdnShimCmd.Start(); err != nil {
 		panic(err)
@@ -173,12 +173,12 @@ func changeProgram() {
 }
 
 func main() {
-	resultsFile := "/home/flok3n/develop/k8s_inc_analysis/data/shim_eval/reconciliation_time_all_diffrent_fraction.csv"
+	resultsFile := "/home/flok3n/develop/k8s_inc_analysis/data/shim_eval/new_topo_model_diffrent_partition_sizes_only1000_.csv"
 	retries := 3
 	minK := 6
-	maxK := 30
-	incSwitchFractions := []float32{0.2, 0.8}
-	incSwitchFractionStrs := []string{"0.2", "0.8"}
+	maxK := 36
+	incSwitchFractions := []float32{0.5}
+	incSwitchFractionStrs := []string{"0.5"}
 	// incSwitchFractions := []float32{0.2, 0.5, 0.8}
 	// incSwitchFractionStrs := []string{"0.2", "0.5", "0.8"}
 	f, err := os.Create(resultsFile)
@@ -186,54 +186,58 @@ func main() {
 		panic(err)
 	}
 	defer f.Close()
-	f.WriteString("mode_key,k,inc_switch_fraction,scenario,topo_update_time_ms,total_time_ms\n")
-	scenarios := []string{"change-program"}
+	f.WriteString("mode_key,k,inc_switch_fraction,scenario,topo_update_time_ms,total_time_ms,partition_size\n")
+	scenarios := []string{"remove-device-inc-switch"}
+	// scenarios := []string{"change-program"}
+	partitionSizes := []int{1000}
+	// partitionSizes := []int{100, 10, 1000}
 	// scenarios := []string{"add-device", "remove-device-inc-switch", "change-program"}
 	// scenarios := []string{"add-device", "remove-device-inc-switch", "remove-device-net", "change-program"}
 	// scenarios := []string{"change-program"}
 
 	expectCallback.Store(false)
 	callbackChan := runCallbackService()
+	for _, partitionSize := range partitionSizes {
+		for k := minK; k <= maxK; k += 2 {
+			for i, incSwitchFraction := range incSwitchFractions {
+				incSwitchFractionStr := incSwitchFractionStrs[i]
+				for _, scenario := range scenarios {
+					fmt.Printf("Running for scenario: %s, k: %d, isw: %s, partsz: %d\n", scenario, k, incSwitchFractionStr, partitionSize)
+					for r := 0; r < retries; r++ {
+						func () {
+							stopKind := runKind()
+							defer stopKind()
+							stopKindaSdn := runKindaSdn(k, incSwitchFraction)
+							defer stopKindaSdn()
+							stopSdnShim := runSdnShim(partitionSize)
+							defer stopSdnShim()
+							cleanupShimResource := createShimResource()	
+							defer cleanupShimResource()
+							time.Sleep(2*time.Second)
 
-	for k := minK; k <= maxK; k += 2 {
-		for i, incSwitchFraction := range incSwitchFractions {
-			incSwitchFractionStr := incSwitchFractionStrs[i]
-			for _, scenario := range scenarios {
-				fmt.Printf("Running for scenario: %s, k: %d, isw: %s\n", scenario, k, incSwitchFractionStr)
-				for r := 0; r < retries; r++ {
-					func () {
-						stopKind := runKind()
-						defer stopKind()
-						stopKindaSdn := runKindaSdn(k, incSwitchFraction)
-						defer stopKindaSdn()
-						stopSdnShim := runSdnShim()
-						defer stopSdnShim()
-						cleanupShimResource := createShimResource()	
-						defer cleanupShimResource()
-						time.Sleep(2*time.Second)
-
-						expectCallback.Store(true)
-						
-						startTime := time.Now()
-						switch scenario {
-						case "add-device":
-							addDevice("x1")
-						case "remove-device-inc-switch":
-							removeDevice("s-0-0-1")
-						case "remove-device-net":
-							removeDevice("s-0-1-1")
-						case "change-program":
-							changeProgram()
-						default:
-							panic("unkown scenario")
-						}
-						updateTime := <-callbackChan
-						reconciliationTime := time.Since(startTime)
-						mode_key := fmt.Sprintf("%d-%s-%s", k, incSwitchFractionStr, scenario)
-						f.WriteString(fmt.Sprintf("%s,%d,%s,%s,%d,%d\n", 
-							mode_key, k, incSwitchFractionStr, scenario, updateTime, reconciliationTime.Milliseconds()))
-						time.Sleep(2*time.Second)
-					}()
+							expectCallback.Store(true)
+							
+							startTime := time.Now()
+							switch scenario {
+							case "add-device":
+								addDevice("x1")
+							case "remove-device-inc-switch":
+								removeDevice("s-0-0-1")
+							case "remove-device-net":
+								removeDevice("s-0-1-1")
+							case "change-program":
+								changeProgram()
+							default:
+								panic("unkown scenario")
+							}
+							updateTime := <-callbackChan
+							reconciliationTime := time.Since(startTime)
+							mode_key := fmt.Sprintf("%d-%s-%s", k, incSwitchFractionStr, scenario)
+							f.WriteString(fmt.Sprintf("%s,%d,%s,%s,%d,%d,%d\n", 
+								mode_key, k, incSwitchFractionStr, scenario, updateTime, reconciliationTime.Milliseconds(), partitionSize))
+							time.Sleep(2*time.Second)
+						}()
+					}
 				}
 			}
 		}

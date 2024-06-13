@@ -57,6 +57,7 @@ func (k *KindaSdn) AddDevicesHandler(w http.ResponseWriter, req *http.Request) {
 	devices := []model.Device{}
 	for _, dev := range body.Devices {
 		baseDev := model.BaseDevice{
+			Index: k.topo.Devices[len(k.topo.Devices) - 1].GetIndex() + 1,
 			Name: dev.Name,
 			Links: make([]*model.Link, len(dev.Links)),
 		}

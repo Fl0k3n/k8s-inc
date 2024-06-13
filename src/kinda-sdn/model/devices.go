@@ -33,6 +33,8 @@ type Link struct {
 type Device interface {
 	GetName() DeviceName
 	GetLinks() []*Link
+	GetIndex() int
+	SetIndex(int) 
 	RemoveLink(DeviceName)
 	AddLink(*Link)
 	GetType() DeviceType
@@ -54,6 +56,7 @@ func NewLink(to DeviceName, mac string, ipv4 string, mask int) *Link {
 type BaseDevice struct {
 	Name DeviceName
 	Links []*Link
+	Index int
 }
 
 func (b *BaseDevice) GetName() DeviceName {
@@ -72,6 +75,14 @@ func (b *BaseDevice) RemoveLink(peer DeviceName) {
 	b.Links = slices.DeleteFunc(b.Links, func(l *Link) bool {
 		return l.To == peer
 	})
+}
+
+func (b *BaseDevice) GetIndex() int {
+	return b.Index
+}
+
+func (b *BaseDevice) SetIndex(index int) {
+	b.Index = index
 }
 
 // 0 based, increment if used in bmv2

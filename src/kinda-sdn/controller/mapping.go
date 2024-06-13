@@ -36,6 +36,7 @@ func DeviceToProto(device model.Device) *pb.Device {
 		links[i] = LinkToProto(link)
 	}
 	return &pb.Device{
+		Index: int32(device.GetIndex()),
 		Name: string(device.GetName()),
 		DeviceType:  convertDeviceType(device),
 		Links: links,
