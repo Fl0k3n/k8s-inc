@@ -1,5 +1,0 @@
-## Append samples you want in your CSV to this file as resources ##
-resources:
-- inc_v1alpha1_incswitch.yaml
-- inc_v1alpha1_externalint.yaml
-#+kubebuilder:scaffold:manifestskustomizesamples

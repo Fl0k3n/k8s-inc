@@ -1,6 +1,0 @@
-apiVersion: inc.example.com/v1alpha1
-kind: ExternalINT
-metadata:
-  name: externalint-sample
-spec:
-  someField: "test"
